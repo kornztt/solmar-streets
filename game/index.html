@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="SOLMAR STREETS — an open-world crime game. Walk or drive around Solmar, steal cars, lose the police, and run jobs for Mara.">
+<meta name="author" content="Korn Shay">
+<meta name="theme-color" content="#0b0f16">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="SOLMAR STREETS — open-world crime game">
+<meta property="og:description" content="Steal it, drive it, lose the cops, get paid. A complete open world in your browser, no install.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f16'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23ffd23f'/%3E%3C/svg%3E">
+<title>SOLMAR STREETS — open-world crime game</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f16; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+  /* Read aloud, never shown: the status line screen readers announce. */
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #ffd23f; font: bold 20px system-ui, sans-serif; background: #0b0f16; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="SOLMAR STREETS: an open-world crime game. Walk or drive around Solmar, steal cars, lose the police, and run jobs for Mara."></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+<div id="loading">Loading Solmar… (WASD to move, E to enter a car)</div>
+<noscript><p style="color:#fff;font-family:system-ui,sans-serif;text-align:center">SOLMAR STREETS needs JavaScript to run — it is a game, after all.</p></noscript>
+<script>
+// The loading line is a courtesy for slow first paints: once the module
+// has run a frame, the canvas owns the screen and this goes away.
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const el = document.getElementById('loading');
+    if (el && window.__SOLMAR__) el.remove();
+  }, 400);
+});
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

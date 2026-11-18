@@ -1,0 +1,14 @@
+# Build output and scratch files: nothing here is part of the entry.
+out/
+*.log
+playtest*.log
+.DS_Store
+*.tar.gz
+*.tmp
+*.swp
+# Editor and OS scratch: local tooling only, never the entry.
+.vscode/
+.idea/
+node_modules/
+.env
+coverage/
