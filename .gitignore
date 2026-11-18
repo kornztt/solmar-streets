@@ -1,21 +1,6 @@
-# Build output and scratch files: nothing here is part of the entry.
+# Build output and local tooling stay out of the repository.
 out/
 *.log
-playtest*.log
 .DS_Store
-*.tar.gz
-*.tmp
-*.swp
-*.orig
-*.rej
 Thumbs.db
-npm-debug.log*
-*.map
-dist/
-build/
-# Editor and OS scratch: local tooling only, never the entry.
-.vscode/
-.idea/
-node_modules/
-.env
-coverage/
+*.swp

@@ -1,7 +1,8 @@
 SPDX-License-Identifier: MIT
+
 MIT License
 
-Copyright (c) 2026 Korn Shay — SOLMAR STREETS
+Copyright (c) 2026 SOLMAR STREETS
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,16 +21,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-In plain words (not legal text): you may use, copy, change and sell this
-game — SOLMAR STREETS, including its code, screenshots and story — for
-commercial purposes too, as long as you keep this notice with it. There is
-no warranty — if it breaks, you own both pieces.
-
-Keep the SPDX line at the top of this file — exactly
-`SPDX-License-Identifier: MIT` as the first line. The entry gate refuses
-a LICENSE without it, even when the license text itself is fine. Keep
-this file in the repository root — the gate reads it from there, nowhere
-else. No additional terms apply to this game beyond this license.
-
