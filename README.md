@@ -96,6 +96,7 @@ for anyone with a fast-car habit.
 | P / Esc | Pause (S saves, R restarts, Q quits to title) |
 | M | Mute |
 | T | Show the frame rate |
+| T | Show the frame rate |
 
 ## How to run
 
@@ -140,6 +141,12 @@ four screenshots. Serve `game/` on port 8123 first, then:
 xvfb-run -a -s "-screen 0 1280x720x24" node ../tools/shoot.js
 xvfb-run -a -s "-screen 0 1280x720x24" node ../tools/playtest2.js
 ```
+
+Screenshots are reproducible: `shoot.js` stages the four scenes with
+`?shot=…&seed=7`, so the same seed always frames the same city. The
+playtest drivers (`playtest2.js` for the full campaign, `verify-m3.js`,
+`verify-taxi.js` and `verify-punch.js` for the single features) drive
+with real keyboard and mouse in headed Firefox under Xvfb.
 
 ## Known limits
 

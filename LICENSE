@@ -27,6 +27,9 @@ game — SOLMAR STREETS, including its code, screenshots and story — for
 commercial purposes too, as long as you keep this notice with it. There is
 no warranty — if it breaks, you own both pieces.
 
-Keep the SPDX line at the top of this file: the entry gate refuses a
-LICENSE without it, even when the license text itself is fine.
+Keep the SPDX line at the top of this file — exactly
+`SPDX-License-Identifier: MIT` as the first line. The entry gate refuses
+a LICENSE without it, even when the license text itself is fine. Keep
+this file in the repository root — the gate reads it from there, nowhere
+else. No additional terms apply to this game beyond this license.
 

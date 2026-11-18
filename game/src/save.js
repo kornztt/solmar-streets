@@ -131,3 +131,15 @@ export function saveSummary(data) {
   const best = data.bestCash ? ` Best haul yet: $${data.bestCash}.` : '';
   return `Saved ${when}: $${cash}, ${done} mission${done === 1 ? '' : 's'} done.${best}`;
 }
+
+/** Whole seconds since the save was written, or null when unknown. */
+export function saveAge(data) {
+  if (!data || !data.savedAt) return null;
+  return Math.max(0, Math.floor((Date.now() - data.savedAt) / 1000));
+}
+
+/** One line for the pause screen: the cross-run totals, in plain words. */
+export function statsSummary(stats) {
+  const s = stats || { missionsDone: 0, fares: 0, kills: 0, cashEarned: 0, carsStolen: 0, runs: 0 };
+  return `Cash $${s.cashEarned} earned  •  ${s.missionsDone} mission${s.missionsDone === 1 ? '' : 's'} done  •  ${s.fares} fares  •  ${s.carsStolen} cars stolen  •  ${s.runs} run${s.runs === 1 ? '' : 's'}`;
+}

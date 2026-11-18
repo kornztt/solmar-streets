@@ -20,10 +20,15 @@ function nextAfter(id) {
   return i >= 0 && i + 1 < MISSIONS.length ? MISSIONS[i + 1].id : null;
 }
 
+/** True while a job is running — the HUD and the fare offer both ask. */
+export function hasActiveJob(world) {
+  return !!world.mission.current;
+}
+
 /** The next job Mara can offer: the next story job, or the repeatable one
  *  once the story is done. Null only when a job is already running. */
 export function nextJobId(world) {
-  if (world.mission.current) return null;
+  if (hasActiveJob(world)) return null;
   if (world.mission.next) return world.mission.next;
   const storyDone = MISSIONS.every((m) => world.mission.done[m.id]);
   return storyDone ? REPEAT_JOB.id : null;
@@ -225,6 +230,7 @@ export function updateFare(world, dt) {
     fare.timer -= dt;
     if (fare.timer <= 0) {
       world.toasts.push({ text: 'Fare cancelled — too slow', t: 0 });
+      world.sfxEvent = 'fail';
       f.fare = null;
       f.cooldown = 15;
       return;

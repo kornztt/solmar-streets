@@ -55,11 +55,11 @@ export function createCity(rng) {
       if (x0 >= DOCKS_X0 || y0 >= ROADS.beachTop) continue; // docks and beach are not blocks
       // The park block stays a park.
       if (x0 >= PARK.x - 1 && y0 >= PARK.y - 1 && x1 <= PARK.x + PARK.w + 1 && y1 <= PARK.y + PARK.h + 1) {
-        for (let t = 0; t < 16; t += 1) {
+        for (let t = 0; t < 18; t += 1) {
           city.trees.push({ x: rng.range(x0 + 20, x1 - 20), y: rng.range(y0 + 20, y1 - 20), r: rng.range(10, 16) });
         }
         // Benches in a ring around the fountain.
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
           city.benches.push({ x: FOUNTAIN.x + Math.cos(a) * 78, y: FOUNTAIN.y + Math.sin(a) * 78, angle: a + Math.PI / 2 });
         }
         continue;

@@ -5,7 +5,7 @@
 import { CAR_MODELS, PICKUP_KINDS, PLACES, ROADS, TUNING, VIEW, WORLD } from './config.js';
 import { createCity, hitsCity, isOnRoad, laneOffset, nearestRoadPoint, randomRoadPoint, resolveCityCollision } from './city.js';
 import { createRandom } from './random.js';
-import { angleDelta, angleTo, burst, clamp, createBullet, createCar, createExplosion, createParticle, createPed, createPickup, createSkid, distance, distanceSq, isPoliceCar, isViper } from './entities.js';
+import { angleDelta, angleTo, burst, clamp, createBullet, createCar, createExplosion, createParticle, createPed, createPickup, createSkid, distance, distanceSq, isPoliceCar, isViper, isWreck } from './entities.js';
 import { beginMission, createFareState, createMissionState, currentObjective, maybeOfferFare, nextJobId, offerMission, updateFare, updateMissions, viperKilled } from './missions.js';
 import { saveGame, saveStats } from './save.js';
 
@@ -565,7 +565,7 @@ function stepPeds(world, dt) {
 }
 
 function stepCarCollisions(world) {
-  const cars = world.cars.filter((c) => !c.dead);
+  const cars = world.cars.filter((c) => !isWreck(c));
   for (const car of cars) {
     car.dmgCd = Math.max(0, car.dmgCd - 1 / 60);
     car.ramCd = Math.max(0, (car.ramCd || 0) - 1 / 60);
@@ -755,11 +755,22 @@ function handleInteract(world, input) {
     world.events.push('buy');
     return;
   }
+  if (prompt.shop === 'gun') {
+    // Tried to buy without the cash: say so out loud, not with silence.
+    world.events.push('denied');
+    world.toasts.push({ text: 'Not enough cash for ammo', t: 0 });
+    return;
+  }
   if (prompt.shop === 'pit' && p.money >= TUNING.repairPrice && p.car) {
     p.money -= TUNING.repairPrice;
     p.car.hp = p.car.maxHp;
     world.toasts.push({ text: 'Car repaired — good as new', t: 0 });
     world.events.push('buy');
+    return;
+  }
+  if (prompt.shop === 'pit' && p.car) {
+    world.events.push('denied');
+    world.toasts.push({ text: 'Not enough cash for a repair', t: 0 });
     return;
   }
   if (prompt.shop === 'mara') {

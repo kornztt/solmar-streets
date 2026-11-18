@@ -39,7 +39,7 @@ export function clamp(v, min, max) {
 export function createCar(model, x, y, angle, kind, rng) {
   const def = CAR_MODELS[model];
   return {
-    id: nextId,
+    id: nextId++,
     kind: 'car',
     model,
     name: def.name,
@@ -65,7 +65,7 @@ export function createCar(model, x, y, angle, kind, rng) {
 /** A pedestrian. state: walk | flee | fare | viper | down. */
 export function createPed(x, y, rng, state = 'walk') {
   return {
-    id: nextId,
+    id: nextId++,
     kind: 'ped',
     x, y,
     angle: rng ? rng.range(0, Math.PI * 2) : 0,
@@ -105,6 +105,21 @@ export function nearestPed(peds, x, y, maxDist = 90) {
   let bestD = maxDist * maxDist;
   for (const ped of peds) {
     if (ped.state === 'down') continue;
+    const d = distanceSq(ped, { x, y });
+    if (d < bestD) {
+      bestD = d;
+      best = ped;
+    }
+  }
+  return best;
+}
+
+/** The nearest living Viper to a point, within maxDist — or null. */
+export function nearestViper(peds, x, y, maxDist = 600) {
+  let best = null;
+  let bestD = maxDist * maxDist;
+  for (const ped of peds) {
+    if (!isViper(ped) || ped.state === 'down') continue;
     const d = distanceSq(ped, { x, y });
     if (d < bestD) {
       bestD = d;
@@ -167,6 +182,11 @@ export function createPickup(x, y, kind, amount) {
 /** True when a car is effectively parked: slow enough to steal quietly. */
 export function isCarStopped(car) {
   return Math.abs(car.speed) < 5;
+}
+
+/** True when a car is a burnt-out wreck (exploded, still smoking). */
+export function isWreck(car) {
+  return !!car.dead;
 }
 
 /** The nearest car to a point, within maxDist — or null. */

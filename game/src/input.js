@@ -20,6 +20,7 @@ export const ACTION_LABELS = {
   [ACTION_HORN]: 'H — honk',
   [ACTION_PAUSE]: 'P — pause',
   [ACTION_MUTE]: 'M — mute',
+  [ACTION_FPS]: 'T — show frame rate',
   [ACTION_RESTART]: 'R — restart (game over)',
 };
 
@@ -100,6 +101,11 @@ export function justPressed(input, code) {
 /** True only on the frame the key went up. */
 export function justReleased(input, code) {
   return input.released.has(code);
+}
+
+/** True only on the frame the left mouse button went down. */
+export function wasClicked(input) {
+  return input.mouseClicked;
 }
 
 /** True only on the frame the key went down. */

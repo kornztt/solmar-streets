@@ -24,6 +24,14 @@ export function createRandom(seed) {
     chance(p) {
       return this.next() < p;
     },
+    // A coin flip: true half the time, on the seeded stream.
+    nextBool() {
+      return this.next() < 0.5;
+    },
+    // +1 or -1, evenly: a direction picked at random.
+    sign() {
+      return this.next() < 0.5 ? -1 : 1;
+    },
     // A shuffled copy of the list (Fisher-Yates): deal from a deck instead
     // of drawing with replacement, so a set of picks never repeats early.
     shuffle(list) {
@@ -72,6 +80,11 @@ export function createRandom(seed) {
       const mid = (min + max) / 2;
       const half = (max - min) / 2;
       return Math.max(min, Math.min(max, mid + (this.gauss() * half) / 2));
+    },
+    // A whole-number normal draw clamped to [min, max]: a group size that
+    // clusters around the middle instead of landing anywhere at random.
+    gaussInt(min, max) {
+      return Math.round(this.gaussRange(min, max));
     },
   };
 }

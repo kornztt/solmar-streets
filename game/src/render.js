@@ -5,7 +5,7 @@
 import { CAR_MODELS, DISTRICTS, GAME_VERSION, PLACES, ROADS, TUNING, VIEW, WORLD } from './config.js';
 import { distance } from './entities.js';
 import { currentObjective, objectiveTarget } from './missions.js';
-import { hasSave } from './save.js';
+import { hasSave, loadGame, saveSummary, statsSummary } from './save.js';
 
 const MINIMAP_W = 184;
 const MINIMAP_H = 138;
@@ -649,9 +649,9 @@ function drawHud(ctx, world, input) {
     ctx.fillStyle = '#fff';
     ctx.font = '13px system-ui, sans-serif';
     ctx.fillText(`PISTOL  ${p.mag} / ${p.ammo}`, bx + 12, by + 44);
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.fillText('F punch  •  click shoot  •  R reload', bx + 12, by + 60);
+    ctx.fillStyle = p.mag === 0 ? '#ff5a4e' : 'rgba(255,255,255,0.6)';
+    ctx.font = p.mag === 0 ? 'bold 11px system-ui, sans-serif' : '11px system-ui, sans-serif';
+    ctx.fillText(p.mag === 0 ? 'Magazine empty — R reload' : 'F punch  •  click shoot  •  R reload', bx + 12, by + 60);
   }
 
   // Context prompt, bottom-centre.
@@ -796,6 +796,12 @@ function drawTitle(ctx, world) {
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.font = '13px system-ui, sans-serif';
   ctx.fillText(`version ${GAME_VERSION}`, VIEW.width / 2, 320);
+  // The save, in plain words, so a returning player knows where they stand.
+  if (hasSave()) {
+    ctx.fillStyle = 'rgba(77,208,165,0.9)';
+    ctx.font = '14px system-ui, sans-serif';
+    ctx.fillText(saveSummary(loadGame()), VIEW.width / 2, 344);
+  }
   const blink = 0.65 + 0.35 * Math.sin(t * 3);
   ctx.globalAlpha = blink;
   ctx.fillStyle = '#ffd23f';
@@ -828,7 +834,7 @@ function drawPaused(ctx, world) {
   ctx.fillText('Q — quit to the title screen', VIEW.width / 2, 446);
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.font = '14px system-ui, sans-serif';
-  ctx.fillText(`Cash $${world.player.money}  •  Missions done ${world.stats.missionsDone}  •  Fares ${world.stats.fares}`, VIEW.width / 2, 500);
+  ctx.fillText(statsSummary(world.stats), VIEW.width / 2, 500);
   ctx.textAlign = 'left';
 }
 

@@ -135,6 +135,11 @@ export function stageShot(name, world) {
     world.particles.push({
       kind: 'particle', x: 3362, y: 903, vx: 40, vy: -20, life: 0.3, maxLife: 0.3, color: '#ffd23f', size: 7,
     });
+    // A second, smaller flash from the nearest viper's return fire — the
+    // fight reads as two-way, not a shooting gallery.
+    world.particles.push({
+      kind: 'particle', x: 3416, y: 862, vx: -30, vy: 10, life: 0.25, maxLife: 0.25, color: '#ff9a3d', size: 5,
+    });
     world.toasts.push({ text: 'Viper down (2/5)', t: 0 });
     return { screen: 'play' };
   }
@@ -160,6 +165,14 @@ export function stageShot(name, world) {
   // A box van at the next kerb, so the street reads as lived-in, not empty.
   const van = createCar('van', 1300, 1500, Math.PI / 2, 'parked', world.rng);
   world.cars.push(van);
+  // A cab rolling past on the avenue behind the player — the street is
+  // moving, not a diorama.
+  const cab = createCar('taxi', 1500, 1400, Math.PI / 2, 'traffic', world.rng);
+  cab.axis = 'v';
+  cab.road = 1500;
+  cab.dir = 1;
+  cab.speed = cab.cruise;
+  world.cars.push(cab);
   world.mission.next = 'm1';
   if (zoomOverride) world.camera.zoom = zoomOverride;
   return { screen: 'play' };

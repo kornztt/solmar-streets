@@ -39,6 +39,10 @@ if (shots.length < 3) {
 }
 for (const shot of shots) {
   const size = statSync(join(out, 'screenshots', shot)).size;
+  if (size === 0) {
+    console.error(`screenshots/${shot} is empty — a failed capture, retake it`);
+    process.exit(1);
+  }
   if (size > MAX_SHOT_BYTES) {
     console.error(`screenshots/${shot} is ${size} bytes — over the ${MAX_SHOT_BYTES} cap, re-encode it smaller`);
     process.exit(1);
@@ -92,6 +96,17 @@ if (Buffer.byteLength(dossier, 'utf8') > MAX_DOSSIER_BYTES) {
   process.exit(1);
 }
 writeFileSync(join(out, 'dossier.json'), dossier);
+
+// The dossier must carry one image per screenshot handed in: a mismatch
+// means the scorer's summary and the screenshots disagree, and the entry
+// would rank on the wrong pictures. buildDossier returns bytes, so read
+// the written file back rather than parsing the byte array.
+const dossierJson = JSON.parse(readFileSync(join(out, 'dossier.json'), 'utf8'));
+const dossierImages = Array.isArray(dossierJson.images) ? dossierJson.images.length : 0;
+if (dossierImages !== shots.length) {
+  console.error(`dossier.json lists ${dossierImages} images but ${shots.length} screenshots were handed in`);
+  process.exit(1);
+}
 
 const gameBytes = readdirSync(join(out, 'game'), { recursive: true })
   .reduce((sum, f) => sum + (statSync(join(out, 'game', f)).isFile() ? statSync(join(out, 'game', f)).size : 0), 0);

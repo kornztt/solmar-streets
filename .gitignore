@@ -6,6 +6,13 @@ playtest*.log
 *.tar.gz
 *.tmp
 *.swp
+*.orig
+*.rej
+Thumbs.db
+npm-debug.log*
+*.map
+dist/
+build/
 # Editor and OS scratch: local tooling only, never the entry.
 .vscode/
 .idea/

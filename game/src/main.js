@@ -8,7 +8,7 @@ import { createAudio, sfx, toggleMute, unlockAudio, updateAudio } from './audio.
 import { createWorld, startRun, stepWorld, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './world.js';
 import { createRenderer } from './render.js';
 import { stageShot } from './shots.js';
-import { clearSave, hasSave, loadGame, saveGame } from './save.js';
+import { clearSave, hasSave, loadGame, saveGame, saveSummary } from './save.js';
 import { seedFromString } from './random.js';
 
 const canvas = document.getElementById('game');
@@ -98,7 +98,12 @@ function frame(now) {
   input.mutePressed = keyPressed(input, ACTION_MUTE);
   input.hornPressed = keyPressed(input, ACTION_HORN);
 
-  if (keyPressed(input, ACTION_FPS)) showFps = !showFps;
+  if (keyPressed(input, ACTION_FPS)) {
+    showFps = !showFps;
+    // Toggling the readout off must put the real title back — otherwise
+    // the tab keeps showing the last frame-rate reading forever.
+    if (!showFps) document.title = 'SOLMAR STREETS — open-world crime game';
+  }
 
   if (input.mutePressed) {
     const muted = toggleMute(audio);
@@ -107,6 +112,9 @@ function frame(now) {
 
   if (!frozen) {
     if (world.screen === SCREEN_TITLE) {
+      // Tell screen readers what waits behind the title: a save, or a fresh start.
+      const statusEl = document.getElementById('status');
+      if (statusEl) statusEl.textContent = hasSave() ? saveSummary(loadGame()) : 'SOLMAR STREETS — no save yet, a new story starts in Solmar.';
       if (input.confirmPressed || input.mouseClicked) {
         onFirstGesture();
         sfx(audio, 'click');

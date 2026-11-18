@@ -2,7 +2,7 @@
 // One clear job: every number the rest of the game tunes against lives here.
 
 export const GAME_TITLE = 'SOLMAR STREETS';
-export const GAME_VERSION = '1.2.0';
+export const GAME_VERSION = '1.3.0';
 export const SAVE_VERSION = 2;
 
 export const VIEW = { width: 1280, height: 720 };
@@ -25,9 +25,9 @@ export const DISTRICTS = [
   { name: 'Downtown', x: 900, y: 100, w: 1300, h: 700, roof: '#7d8aa5', accent: '#5b6b8c', blurb: 'glass towers, the Gun Barn, and the busiest traffic in Solmar' },
   { name: 'Old Town', x: 500, y: 1400, w: 1000, h: 800, roof: '#b0703f', accent: '#8a5230', blurb: 'brick streets, Mara\u2019s hideout, tight corners for a clean getaway' },
   { name: 'Portside', x: 3250, y: 200, w: 350, h: 2100, roof: '#6e7a72', accent: '#57615a', blurb: 'docks, warehouses and the Viper crew\u2019s turf' },
-  { name: 'Palma Beach', x: 100, y: 2400, w: 3400, h: 300, roof: '#e8d29a', accent: '#d9bd7f', blurb: 'sand, surf and the long coastal boulevard' },
+  { name: 'Palma Beach', x: 100, y: 2400, w: 3400, h: 300, roof: '#e8d29a', accent: '#d9bd7f', blurb: 'sand, surf, the long coastal boulevard, and the Comet GT waiting on it' },
   { name: 'The Hills', x: 100, y: 100, w: 600, h: 600, roof: '#a86a7d', accent: '#8a5266', blurb: 'mansions, gates and long driveways' },
-  { name: 'Industrial', x: 2100, y: 1700, w: 1100, h: 600, roof: '#8a8f96', accent: '#6f747b', blurb: 'the Pit Stop garage and wide, empty service roads' },
+  { name: 'Industrial', x: 2100, y: 1700, w: 1100, h: 600, roof: '#8a8f96', accent: '#6f747b', blurb: 'the Pit Stop garage, wide empty service roads, and the long straight where top speed gets tested' },
 ];
 
 // Car models: how each one drives. Comet GT is the hero car of mission 1;
@@ -138,7 +138,7 @@ export const MISSIONS = [
     intro: 'Mara: "The Vipers moved onto Pier 9 and they are taxing my docks — my trucks, my crews, my money. Five of them, armed, and they do not scare easy. Clear the pier, then come home. Bring the Comet if you want — it will not mind. And Jax? Make it loud. I want the whole harbour to hear it."',
     steps: [
       { text: 'Get to Pier 9 at the docks', target: 'docks', hint: 'Far east, past the containers. On foot is safer once you are there — the pier is tight.' },
-      { text: 'Eliminate the Viper crew (0/5)', target: 'docks', hint: 'Pistol out, click to shoot. They shoot back — use the containers as cover.' },
+      { text: 'Eliminate the Viper crew (0/5)', target: 'docks', hint: 'Pistol out, click to shoot. They shoot back — use the containers as cover and watch for the red shirts.' },
       { text: 'Report back to the hideout', target: 'hideout', hint: 'Job done means the heat is off. Mara will have a word with the SPPD.' },
     ],
   },

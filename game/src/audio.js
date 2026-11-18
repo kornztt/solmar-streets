@@ -187,6 +187,10 @@ export function sfx(audio, name) {
     case 'click':
       blip(audio, 880, 0.05, 'square', 0.15);
       break;
+    case 'denied':
+      // Tried to buy without the cash: a low dull buzz, not a crash.
+      blip(audio, 160, 0.14, 'sawtooth', 0.2, 110);
+      break;
     case 'reload':
       // A pistol reload: two metallic clicks, magazine out and in.
       blip(audio, 1200, 0.05, 'square', 0.18, 700);
@@ -289,6 +293,23 @@ function musicStep(audio, step, when) {
     g.connect(audio.master);
     src.start(when);
     src.stop(when + 0.06);
+  }
+  // A soft crash on the first step of each four-bar phrase: the loop
+  // turns a corner instead of just repeating.
+  if (step % 64 === 0) {
+    const src = ctx.createBufferSource();
+    src.buffer = audio.noiseBuf;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.value = 4500;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.09, when);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 0.5);
+    src.connect(f);
+    f.connect(g);
+    g.connect(audio.master);
+    src.start(when);
+    src.stop(when + 0.55);
   }
 }
 
