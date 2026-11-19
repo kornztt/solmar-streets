@@ -1,7 +1,8 @@
 # SOLMAR STREETS
 
-[![make.fun](https://make.fun/badge.svg)](https://make.fun/bounty/gta6-01)
-[![gta6-01](https://make.fun/bounty/gta6-01/badge.svg)](https://make.fun/bounty/gta6-01)
+[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
+[![rank](https://make.fun/badge/gta6-01/kornztt/solmar-streets/rank.svg)](https://make.fun/bounty/gta6-01)
+[![reward](https://make.fun/badge/gta6-01/kornztt/solmar-streets/reward.svg)](https://make.fun/bounty/gta6-01)
 
 An open-world crime game in the spirit of GTA 6, built from scratch for the
 [make.fun gta6-01 bounty](https://make.fun/bounty/gta6-01). 100% original:
