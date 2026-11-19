@@ -1,394 +1,287 @@
-// SOLMAR STREETS — boot, game loop and the world object that holds it all
-// together: the city, the entities, the missions, the wanted level, the
-// shops, the clock and the save. One file, one job: run the game.
+// SOLMAR STREETS — boot, game loop, wiring. ES modules, no network, no assets.
+import { CFG } from './config.js';
+import { RNG, clamp, dist } from './random.js';
+import { createGame } from './state.js';
+import { buildCity, landmarkPos } from './city.js';
+import { spawnPlayer, spawnParkedCars, spawnTraffic, spawnPeds, updatePlayer, updateTraffic, updatePeds, nearestCar, enterCar, exitCar } from './entities.js';
+import { talkToVera, updateMissions, tryHailTaxi, updateTaxi, toast } from './missions.js';
+import { tryPunch, tryShoot, updateBullets, updateBreakers, updateCourier, updateWanted, updateCops, addHeat } from './combat.js';
+import { initAudio, sfx, musicTick } from './audio.js';
+import { draw } from './render.js';
+import { drawHud, drawScreen } from './hud.js';
+import { bindInput } from './input.js';
+import { saveGame, loadSave, applySave, hasSave } from './save.js';
+import { applyShot } from './shots.js';
 
-import { City } from './city.js';
-import { Entities } from './entities.js';
-import { Missions } from './missions.js';
-import { Combat } from './combat.js';
-import { AudioEngine } from './audio.js';
-import { Renderer, Particles, daylight } from './render.js';
-import { Hud } from './hud.js';
-import { Input } from './input.js';
-import { readShotQuery, stageShot } from './shots.js';
-import { saveGameData, loadGameData, clearSaveData } from './save.js';
-import { PRICES, WANTED_MAX, WANTED_DECAY_SECONDS } from './config.js';
-import { clamp, dist } from './random.js';
+const params = new URLSearchParams(location.search);
+const seed = parseInt(params.get('seed') || '11', 10) || 11;
+const shotName = params.get('shot');
+
+const G = createGame(seed);
+const city = buildCity(seed);
+const rng = new RNG(seed);
+
+spawnPlayer(G, city);
+spawnParkedCars(G, rng);
+spawnTraffic(G, rng, 14);
+spawnPeds(G, rng, 42);
+if (shotName) applyShot(G, city, shotName);
 
 const canvas = document.getElementById('game');
-const input = new Input(canvas);
+const ctx = canvas.getContext('2d');
+canvas.width = CFG.viewW;
+canvas.height = CFG.viewH;
+bindInput(G, canvas);
 
-class World {
-  constructor(seed) {
-    this.seed = seed;
-    this.city = new City(seed);
-    this.entities = new Entities(this.city, seed);
-    this.missions = new Missions(this.city, this.entities, this);
-    this.combat = new Combat(this.entities, this.missions, this);
-    this.audio = new AudioEngine();
-    this.renderer = new Renderer(canvas);
-    this.hud = new Hud(canvas);
-    this.particles = new Particles();
-    this.state = 'title'; // title | playing | paused | wasted | menu
-    this.menuIndex = 0;
-    this.wanted = 0;
-    this.quietTime = 0;
-    this.hour = 13; // 1pm, sun high
-    this.objective = 'Press M for Vera\'s jobs, or just drive.';
-    this.policeTimer = 0;
-    this.taxiTimer = 0;
-    this.settled = 0;
+window.__solmarSave = () => saveGame(G);
+
+function startGame() {
+  initAudio();
+  sfx('click');
+  G.screen = 'playing';
+}
+
+function continueGame() {
+  const data = loadSave();
+  if (data) {
+    applySave(G, data);
+    G.player.onFoot = true;
+    G.player.car = null;
+    toast(G, 'Save loaded — welcome back to Solmar.');
   }
+  startGame();
+}
 
-  // ---- helpers the systems call ----
+function respawn() {
+  G.hp = 100;
+  G.wanted = 0;
+  G.heat = 0;
+  G.cops.length = 0;
+  G.money = Math.max(0, G.money - 100);
+  const h = landmarkPos('hideout');
+  G.player.x = h.x + 40;
+  G.player.y = h.y + 30;
+  G.player.onFoot = true;
+  G.player.car = null;
+  G.screen = 'playing';
+  G.over = null;
+  toast(G, 'Back on your feet. Vera is waiting.');
+}
 
-  toast(text) {
-    this.hud.toast(text);
-  }
-
-  addShake(amount) {
-    this.renderer.addShake(amount);
-  }
-
-  setWanted(n) {
-    this.wanted = clamp(n, 0, WANTED_MAX);
-  }
-
-  raiseWanted(n, why) {
-    const before = this.wanted;
-    this.setWanted(this.wanted + n);
-    this.quietTime = 0;
-    if (this.wanted > before) {
-      this.toast(`Wanted level ${this.wanted} — ${why}`);
+function interact() {
+  const p = G.player;
+  if (p.onFoot) {
+    const h = landmarkPos('hideout');
+    if (dist(p.x, p.y, h.x, h.y) < 90 && G.mission.id === null) {
+      if (talkToVera(G)) { sfx('pickup'); return; }
     }
-  }
-
-  onPedHit(car) {
-    if (car.kind === 'player' || car.driver === 'player') {
-      this.raiseWanted(1, 'you hit a pedestrian');
-      this.audio.play('crash');
-    }
-  }
-
-  settle(seconds) {
-    this.settled = seconds;
-  }
-
-  // ---- shops ----
-
-  tryPitStop() {
-    const p = this.entities.player;
-    const s = this.city.sites.pitstop;
-    const car = p.inCar;
-    if (!car) return;
-    if (dist(p.x, p.y, s.x, s.y) > 130) return;
-    if (car.hp >= 100) {
-      // A full-health car is turned away, not charged.
-      this.toast('Pit Stop: your car is already mint — no charge.');
+    const car = nearestCar(G, p.x, p.y, 70);
+    if (car) {
+      enterCar(G, car);
+      addHeat(G, 25);
+      sfx('click');
+      toast(G, 'Car stolen — the heat is on.');
       return;
     }
-    const missing = 100 - car.hp;
-    const cost = Math.ceil(missing * PRICES.repairPerHp);
-    if (p.money < cost) {
-      this.toast(`Pit Stop: repair costs $${cost} — you have $${Math.floor(p.money)}.`);
-      return;
-    }
-    p.money -= cost;
-    car.hp = 100;
-    this.toast(`Pit Stop: repaired for $${cost}.`);
-    this.audio.play('cash');
-  }
-
-  tryGunBarn() {
-    const p = this.entities.player;
-    const s = this.city.sites.gunbarn;
-    if (p.inCar) return;
-    if (dist(p.x, p.y, s.x, s.y) > 110) return;
-    if (p.money < PRICES.ammoClip) {
-      this.toast(`Gun Barn: a clip is $${PRICES.ammoClip} — you have $${Math.floor(p.money)}.`);
-      return;
-    }
-    p.money -= PRICES.ammoClip;
-    p.ammo += PRICES.ammoPerClip;
-    this.toast(`Gun Barn: +${PRICES.ammoPerClip} rounds.`);
-    this.audio.play('cash');
-  }
-
-  // ---- save / load ----
-
-  saveGame() {
-    const p = this.entities.player;
-    saveGameData({
-      money: Math.floor(p.money),
-      hp: p.hp,
-      ammo: p.ammo,
-      x: p.x,
-      y: p.y,
-      hour: this.hour,
-      seed: this.seed,
-      done: this.missions.done,
-      savedAt: Date.now(),
-    });
-  }
-
-  loadSave() {
-    const s = loadGameData();
-    if (!s) return false;
-    const p = this.entities.player;
-    p.money = s.money;
-    p.hp = s.hp;
-    p.ammo = s.ammo;
-    p.x = s.x;
-    p.y = s.y;
-    this.hour = s.hour;
-    this.missions.done = s.done || this.missions.done;
-    this.toast('Save loaded — welcome back, driver.');
-    return true;
-  }
-
-  // ---- per-frame update ----
-
-  update(dt) {
-    if (this.state === 'title') {
-      if (input.pressed('Enter')) {
-        this.startGame(false);
-      } else if (input.pressed('KeyC')) {
-        this.startGame(true);
-      }
-      return;
-    }
-    if (this.state === 'wasted') {
-      if (input.pressed('Enter')) this.respawn();
-      return;
-    }
-    if (this.state === 'menu') {
-      const list = this.missions.availableMissions();
-      if (input.pressed('ArrowUp') || input.pressed('KeyW')) {
-        this.menuIndex = (this.menuIndex - 1 + Math.max(1, list.length)) % Math.max(1, list.length);
-      }
-      if (input.pressed('ArrowDown') || input.pressed('KeyS')) {
-        this.menuIndex = (this.menuIndex + 1) % Math.max(1, list.length);
-      }
-      if (input.pressed('Enter') && list.length > 0) {
-        const m = list[this.menuIndex];
-        if (this.missions.start(m.id)) this.state = 'playing';
-      }
-      if (input.pressed('KeyM') || input.pressed('Escape')) this.state = 'playing';
-      return;
-    }
-    if (this.state === 'paused') {
-      if (input.pressed('KeyP') || input.pressed('Escape')) this.state = 'playing';
-      if (input.pressed('KeyM')) {
-        this.state = 'menu';
-        this.menuIndex = 0;
-      }
-      if (input.pressed('KeyQ')) {
-        this.saveGame();
-        this.state = 'title';
-      }
-      return;
-    }
-
-    // --- playing ---
-    if (this.settled > 0) {
-      this.settled -= dt;
-      // World still ticks so the staged scene is alive, but the player
-      // cannot act yet — screenshots catch a living street, not a freeze.
-    }
-    // Clock: one game hour every 100 seconds.
-    this.hour = (this.hour + dt / 100) % 24;
-
-    // Pause / menu / taxi keys.
-    if (input.pressed('KeyP') || input.pressed('Escape')) {
-      this.state = 'paused';
-      this.saveGame();
-      return;
-    }
-    if (input.pressed('KeyM')) {
-      this.state = 'menu';
-      this.menuIndex = 0;
-      return;
-    }
-    if (input.pressed('KeyT')) this.missions.startTaxi();
-    if (input.pressed('KeyE')) this.entities.tryEnterExitCar(this);
-    if (input.pressed('KeyF')) this.tryPitStop();
-    if (input.pressed('KeyB')) this.tryGunBarn();
-    if (input.pressed('KeyN')) {
-      const on = this.audio.toggleMusic();
-      this.toast(on ? 'Music on' : 'Music off');
-    }
-
-    const p = this.entities.player;
-    // Mouse aim in world coordinates.
-    const mw = this.mouseWorld();
-    this.entities.updatePlayer(dt, input, this);
-    this.entities.updateTraffic(dt, this);
-    this.entities.updatePolice(dt, this);
-    this.entities.updatePeds(dt, this);
-    this.combat.update(dt, input, mw);
-    this.missions.update(dt);
-    this.particles.update(dt);
-    this.hud.update(dt);
-
-    // Wanted decay after quiet time.
-    if (this.wanted > 0) {
-      this.quietTime += dt;
-      if (this.quietTime > WANTED_DECAY_SECONDS) {
-        this.wanted -= 1;
-        this.quietTime = 0;
-        this.toast(`Wanted level ${this.wanted}`);
-      }
-    }
-    // Police pressure scales with the stars.
-    const wantPolice = Math.min(this.wanted, 3);
-    const havePolice = this.entities.cars.filter((c) => c.kind === 'police' && !c.dead).length;
-    this.policeTimer -= dt;
-    if (wantPolice > havePolice && this.policeTimer <= 0) {
-      this.policeTimer = 2.5;
-      const a = Math.random() * Math.PI * 2;
-      const sx = clamp(p.x + Math.cos(a) * 700, 40, this.city.size - 40);
-      const sy = clamp(p.y + Math.sin(a) * 700, 40, this.city.size - 40);
-      const rp = this.city.nearestRoadPoint(sx, sy);
-      this.entities.spawnPolice(rp.x, rp.y);
-    }
-    const anyPolice = havePolice > 0;
-    this.audio.setSiren(anyPolice);
-    const car = p.inCar;
-    this.audio.setEngine(car ? Math.abs(car.speed) / car.model.top : 0, !!car);
-
-    // Death.
-    if (p.hp <= 0 && !p.dead) {
-      p.dead = true;
-      this.state = 'wasted';
-      this.audio.play('fail');
-    }
-    // Autosave every 20 s of play.
-    this.taxiTimer += dt;
-    if (this.taxiTimer > 20) {
-      this.taxiTimer = 0;
-      this.saveGame();
-    }
-  }
-
-  mouseWorld() {
-    const rect = canvas.getBoundingClientRect();
-    const cx = (input.mouseX - rect.width / 2) / this.renderer.zoom + this.renderer.camX;
-    const cy = (input.mouseY - rect.height / 2) / this.renderer.zoom + this.renderer.camY;
-    return { x: cx, y: cy };
-  }
-
-  startGame(fromSave) {
-    this.audio.ensure();
-    if (fromSave) {
-      this.loadSave();
-    } else {
-      clearSaveData();
-    }
-    this.state = 'playing';
-  }
-
-  respawn() {
-    const p = this.entities.player;
-    p.dead = false;
-    p.hp = 100;
-    p.money = Math.max(0, Math.floor(p.money * 0.9));
-    this.setWanted(0);
-    if (p.inCar) {
-      p.inCar.kind = 'parked';
-      p.inCar.driver = null;
-      p.inCar = null;
-      p.onFoot = true;
-    }
-    p.x = this.city.sites.hideout.x;
-    p.y = this.city.sites.hideout.y + 100;
-    this.missions.active = null;
-    this.missions.enemies = [];
-    this.state = 'playing';
-    this.toast('Back on the street. Vera kept your car — mostly.');
-  }
-
-  draw() {
-    const ctx = this.renderer.ctx;
-    if (this.state === 'title') {
-      this.hud.drawTitle(this);
-      return;
-    }
-    this.renderer.draw(this);
-    if (this.state === 'playing' || this.state === 'menu' || this.state === 'paused') {
-      this.hud.draw(this);
-    }
-    if (this.state === 'paused') this.hud.drawPause(this);
-    if (this.state === 'wasted') this.hud.drawWasted(this);
-    if (this.state === 'menu') this.hud.drawMissionMenu(this);
+  } else {
+    exitCar(G);
+    sfx('click');
   }
 }
 
-// ---- boot ----
-
-function boot() {
-  const shot = readShotQuery();
-  const seed = shot ? shot.seed : 11;
-  const world = new World(seed);
-
-  function resize() {
-    world.renderer.resize(window.innerWidth, window.innerHeight);
+function repair() {
+  const p = G.player;
+  if (!p.car) return;
+  const ps = landmarkPos('pitstop');
+  if (dist(p.x, p.y, ps.x, ps.y) > 95) return;
+  if (p.car.hp >= p.car.maxHp) {
+    toast(G, 'Pit Stop: already mint — no charge.');
+    return;
   }
-  window.addEventListener('resize', resize);
-  resize();
-
-  // Debug hook for automated play-testing (harmless in normal play).
-  window.__solmar = {
-    world,
-    version: 'rebuild2',
-    state: () => world.state,
-    player: () => world.entities.player,
-    wanted: () => world.wanted,
-    mission: () => world.missions.active,
-    done: () => world.missions.done,
-    startMission: (id) => world.missions.start(id),
-    teleport: (x, y) => {
-      const p = world.entities.player;
-      if (p.inCar) {
-        p.inCar.x = x;
-        p.inCar.y = y;
-      }
-      p.x = x;
-      p.y = y;
-    },
-    setWanted: (n) => world.setWanted(n),
-    giveMoney: (n) => { world.entities.player.money += n; },
-    damagePlayer: (n) => { world.entities.player.hp = Math.max(0, world.entities.player.hp - n); },
-    damageCar: (n) => {
-      const c = world.entities.player.inCar;
-      if (c) c.hp = Math.max(0, c.hp - n);
-    },
-    startTaxi: () => world.missions.startTaxi(),
-    enemies: () => world.missions.enemies,
-    courier: () => world.missions.courier,
-    cars: () => world.entities.cars,
-    peds: () => world.entities.peds,
-    save: () => world.saveGame(),
-  };
-
-  if (shot) {
-    world.audio.ensure();
-    stageShot(world, shot);
+  if (G.money < CFG.repairCost) {
+    toast(G, 'Pit Stop: you cannot afford the $120 repair.');
+    return;
   }
+  G.money -= CFG.repairCost;
+  p.car.hp = p.car.maxHp;
+  sfx('repair');
+  toast(G, 'Pit Stop: repaired to full.');
+}
 
-  let last = performance.now();
-  function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    try {
-      world.update(dt);
-      world.draw();
-    } catch (e) {
-      console.error('SOLMAR error', e);
+function buyAmmo() {
+  const p = G.player;
+  if (!p.onFoot) return;
+  const gb = landmarkPos('gunbarn');
+  if (dist(p.x, p.y, gb.x, gb.y) > 80) return;
+  if (G.money < CFG.ammoCost) {
+    toast(G, 'Gun Barn: you cannot afford $150 of ammo.');
+    return;
+  }
+  G.money -= CFG.ammoCost;
+  G.reserve += CFG.ammoPack;
+  sfx('pickup');
+  toast(G, `Gun Barn: +${CFG.ammoPack} ammo in reserve.`);
+}
+
+function reload() {
+  const p = G.player;
+  if (!p.onFoot || G.ammo >= CFG.pistolMag || G.reserve <= 0) return;
+  const need = CFG.pistolMag - G.ammo;
+  const take = Math.min(need, G.reserve);
+  G.ammo += take;
+  G.reserve -= take;
+  sfx('click');
+}
+
+window.__solmarKey = (code, isDown) => {
+  if (!isDown) return;
+  if (G.screen === 'title') {
+    if (code === 'KeyC' && hasSave()) continueGame();
+    else if (code === 'Enter' || code === 'Space') startGame();
+    return;
+  }
+  if (G.screen === 'wasted' || G.screen === 'busted') {
+    if (code === 'Enter') respawn();
+    return;
+  }
+  if (code === 'KeyP' || code === 'Escape') {
+    G.screen = G.screen === 'paused' ? 'playing' : 'paused';
+    sfx('click');
+    return;
+  }
+  if (G.screen !== 'playing') return;
+  if (code === 'KeyE') interact();
+  else if (code === 'KeyF') repair();
+  else if (code === 'KeyB') buyAmmo();
+  else if (code === 'KeyT') { if (tryHailTaxi(G)) sfx('pickup'); }
+  else if (code === 'KeyR') reload();
+  else if (code === 'KeyM') { /* mute handled by audio master in a later pass */ }
+};
+
+window.__solmarClick = (x, y) => {
+  if (G.screen === 'title') { startGame(); return; }
+  if (G.screen === 'paused') { G.screen = 'playing'; return; }
+  if (G.screen !== 'playing') return;
+  const wx = G.camera.x + x;
+  const wy = G.camera.y + y;
+  if (G.player.onFoot) {
+    if (tryShoot(G, wx, wy)) sfx('shoot');
+  }
+};
+
+// Space doubles as punch on foot: polled in the loop (held key).
+let last = performance.now();
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (G.screen === 'playing') {
+    G.time += dt;
+    G.clock += dt * 0.5; // 1 game-minute per 2 real seconds
+    // Mouse world position.
+    G.mouse.wx = G.camera.x + G.mouse.x;
+    G.mouse.wy = G.camera.y + G.mouse.y;
+    // Held space = punch on foot.
+    if (G.keys['Space'] && G.player.onFoot) {
+      if (tryPunch(G)) sfx('punch');
     }
-    input.endFrame();
-    requestAnimationFrame(frame);
+    updatePlayer(G, dt, city);
+    updateTraffic(G, dt, city);
+    updatePeds(G, dt, city);
+    updateMissions(G, dt);
+    updateTaxi(G, dt);
+    updateBullets(G, dt, city);
+    updateBreakers(G, dt);
+    updateCourier(G, dt);
+    updateWanted(G, dt);
+    updateCops(G, dt, city);
+    // Particles + floats + toasts.
+    for (let i = G.parts.length - 1; i >= 0; i--) {
+      const pt = G.parts[i];
+      pt.x += pt.vx * dt;
+      pt.y += pt.vy * dt;
+      pt.life -= dt;
+      if (pt.life <= 0) G.parts.splice(i, 1);
+    }
+    for (let i = G.floats.length - 1; i >= 0; i--) {
+      const f = G.floats[i];
+      f.y -= 30 * dt;
+      f.life -= dt;
+      if (f.life <= 0) G.floats.splice(i, 1);
+    }
+    for (let i = G.toasts.length - 1; i >= 0; i--) {
+      G.toasts[i].t -= dt;
+      if (G.toasts[i].t <= 0) G.toasts.splice(i, 1);
+    }
+    // Camera follows the player.
+    const tx = clamp(G.player.x - CFG.viewW / 2, 0, CFG.world - CFG.viewW);
+    const ty = clamp(G.player.y - CFG.viewH / 2, 0, CFG.world - CFG.viewH);
+    G.camera.x += (tx - G.camera.x) * Math.min(1, dt * 6);
+    G.camera.y += (ty - G.camera.y) * Math.min(1, dt * 6);
+    // Autosave.
+    G.saveTimer += dt;
+    if (G.saveTimer > 15) {
+      G.saveTimer = 0;
+      saveGame(G);
+    }
+    musicTick(G, dt);
+  } else if (G.over) {
+    G.over.t += dt;
   }
+  draw(G, ctx, city, CFG.viewW, CFG.viewH);
+  if (G.screen === 'playing' || G.screen === 'paused') drawHud(G, ctx, CFG.viewW, CFG.viewH);
+  drawScreen(G, ctx, CFG.viewW, CFG.viewH);
   requestAnimationFrame(frame);
 }
 
-boot();
+requestAnimationFrame(frame);
+
+// Debug / probe handle: state read-outs and honest gameplay hooks.
+window.__game = {
+  G,
+  city,
+  start: startGame,
+  continue: continueGame,
+  respawn,
+  applyShot: (name) => applyShot(G, city, name),
+  interact,
+  repair,
+  buyAmmo,
+  reload,
+  talkToVera: () => talkToVera(G),
+  state: () => ({
+    screen: G.screen,
+    money: G.money,
+    hp: G.hp,
+    ammo: G.ammo,
+    reserve: G.reserve,
+    wanted: G.wanted,
+    heat: G.heat,
+    mission: { id: G.mission.id, stage: G.mission.stage, timer: G.mission.timer, breakers: G.mission.breakers.length, done: G.mission.done.slice() },
+    taxi: { active: G.taxi.active, pay: G.taxi.pay },
+    player: { x: Math.round(G.player.x), y: Math.round(G.player.y), onFoot: G.player.onFoot, car: !!G.player.car },
+    cars: G.cars.length,
+    peds: G.peds.length,
+    cops: G.cops.length,
+    clock: G.clock,
+  }),
+  // Teleport the player (probe hook — the game's own logic still runs the objectives).
+  teleport: (x, y) => {
+    if (G.player.car) {
+      G.player.car.x = x;
+      G.player.car.y = y;
+      G.player.car.speed = 0;
+    }
+    G.player.x = x;
+    G.player.y = y;
+    G.camera.x = clamp(x - CFG.viewW / 2, 0, CFG.world - CFG.viewW);
+    G.camera.y = clamp(y - CFG.viewH / 2, 0, CFG.world - CFG.viewH);
+  },
+  // Screen coordinates of a world point (for aimed clicks in the probe).
+  toScreen: (x, y) => ({ x: x - G.camera.x, y: y - G.camera.y }),
+  errors: [],
+};
+
+window.addEventListener('error', (e) => {
+  window.__game.errors.push(String(e.message || e.error));
+});

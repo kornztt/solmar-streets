@@ -1,242 +1,152 @@
-// HUD, menus and toasts: everything the player reads on top of the world.
-// Title screen, pause menu, WASTED screen, mission picker, wanted stars,
-// money / health / ammo, the objective line and the toast feed.
+// HUD, prompts, toasts, and the title / pause / WASTED / BUSTED screens.
+import { CFG, fmtClock, districtAt } from './config.js';
+import { clamp } from './random.js';
+import { landmarkPos } from './city.js';
+import { missionObjective, nextMissionIdx } from './missions.js';
+import { dist } from './random.js';
+import { nearestCar } from './entities.js';
+import { hasSave } from './save.js';
 
-import { MISSION_DEFS } from './missions.js';
-import { hasSaveData } from './save.js';
-
-export class Hud {
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.toasts = [];
-    this.menuIndex = 0;
+export function drawHud(G, ctx, vw, vh) {
+  ctx.textAlign = 'left';
+  // Top-left: money, health, ammo.
+  ctx.fillStyle = 'rgba(10,14,24,0.75)';
+  ctx.fillRect(12, 12, 250, 86);
+  ctx.fillStyle = '#f2b705';
+  ctx.font = 'bold 26px sans-serif';
+  ctx.fillText(`$${G.money}`, 24, 44);
+  ctx.fillStyle = '#fff';
+  ctx.font = '14px sans-serif';
+  ctx.fillText(`HP ${Math.ceil(G.hp)}`, 24, 66);
+  ctx.fillStyle = '#222';
+  ctx.fillRect(70, 56, 120, 10);
+  ctx.fillStyle = G.hp > 40 ? '#37b24d' : '#e33f2f';
+  ctx.fillRect(70, 56, 120 * clamp(G.hp / 100, 0, 1), 10);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(`Ammo ${G.ammo} (+${G.reserve})`, 24, 88);
+  // Top-right: wanted stars, clock, district.
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(10,14,24,0.75)';
+  ctx.fillRect(vw - 232, 12, 220, 66);
+  let stars = '';
+  for (let i = 0; i < 5; i++) stars += i < G.wanted ? '★' : '☆';
+  ctx.fillStyle = G.wanted > 0 ? '#ff5a5a' : '#888';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText(stars, vw - 24, 42);
+  ctx.fillStyle = '#fff';
+  ctx.font = '14px sans-serif';
+  const bx = Math.floor(G.player.x / CFG.pitch);
+  const by = Math.floor(G.player.y / CFG.pitch);
+  ctx.fillText(`${fmtClock(G.clock)}  ${districtAt(bx, by)}`, vw - 24, 64);
+  // Objective, bottom-left.
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(10,14,24,0.75)';
+  ctx.fillRect(12, vh - 52, 560, 40);
+  ctx.fillStyle = '#f2b705';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillText(missionObjective(G), 24, vh - 26);
+  if (G.taxi.active) {
+    ctx.fillStyle = '#19b8a6';
+    ctx.fillText(`Taxi: ${Math.ceil(G.taxi.timer)}s — $${G.taxi.pay}`, 24, vh - 62);
   }
-
-  toast(text) {
-    this.toasts.push({ text, life: 3.2 });
-    if (this.toasts.length > 4) this.toasts.shift();
-  }
-
-  update(dt) {
-    for (const t of this.toasts) t.life -= dt;
-    this.toasts = this.toasts.filter((t) => t.life > 0);
-  }
-
-  // ---- in-game HUD ----
-
-  draw(world) {
-    const { ctx, canvas } = this;
-    const p = world.entities.player;
-    const wanted = world.wanted;
-    ctx.save();
+  // Interaction prompt.
+  const prompt = interactionPrompt(G);
+  if (prompt) {
+    ctx.fillStyle = 'rgba(10,14,24,0.8)';
+    ctx.fillRect(vw / 2 - 190, vh - 120, 380, 34);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(prompt, vw / 2, vh - 97);
     ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-
-    // Top-left: money, health, ammo.
-    ctx.fillStyle = 'rgba(20,24,36,0.8)';
-    ctx.beginPath();
-    ctx.roundRect(14, 14, 220, 84, 8);
-    ctx.fill();
-    ctx.fillStyle = '#2ecc71';
-    ctx.font = 'bold 22px sans-serif';
-    ctx.fillText(`$${Math.floor(p.money)}`, 26, 22);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '14px sans-serif';
-    ctx.fillText(`Health ${Math.ceil(p.hp)}`, 26, 52);
-    ctx.fillStyle = '#222831';
-    ctx.fillRect(26, 72, 120, 8);
-    ctx.fillStyle = p.hp > 30 ? '#2ecc71' : '#e74c3c';
-    ctx.fillRect(26, 72, 120 * (p.hp / 100), 8);
-    ctx.fillStyle = '#ffd166';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText(`Ammo ${p.ammo}`, 160, 52);
-    if (p.inCar) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText(`Car ${Math.ceil(p.inCar.hp)}%`, 160, 72);
-      ctx.fillText(`${Math.round(Math.abs(p.inCar.speed) * 0.36)} km/h`, 26, 92 - 14);
-    }
-
-    // Wanted stars, top centre.
-    ctx.textAlign = 'center';
-    for (let i = 0; i < 5; i++) {
-      ctx.font = '26px sans-serif';
-      ctx.fillStyle = i < wanted ? '#ffd166' : 'rgba(255,255,255,0.25)';
-      ctx.fillText('★', canvas.width / 2 - 60 + i * 30, 16);
-    }
-
-    // Objective line, bottom centre.
-    if (world.objective) {
-      ctx.font = '15px sans-serif';
-      const w = ctx.measureText(world.objective).width + 28;
-      ctx.fillStyle = 'rgba(20,24,36,0.8)';
-      ctx.beginPath();
-      ctx.roundRect((canvas.width - w) / 2, canvas.height - 52, w, 32, 8);
-      ctx.fill();
-      ctx.fillStyle = '#ffe66d';
-      ctx.fillText(world.objective, canvas.width / 2, canvas.height - 44);
-    }
-
-    // Mission timer, under the stars.
-    if (world.missions.active && world.missions.active.timer > 0) {
-      ctx.font = 'bold 20px sans-serif';
-      ctx.fillStyle = world.missions.active.timer < 15 ? '#ff6b6b' : '#ffffff';
-      ctx.fillText(`${Math.ceil(world.missions.active.timer)}s`, canvas.width / 2, 52);
-    }
-
-    // Toasts, bottom left.
-    ctx.textAlign = 'left';
-    let ty = canvas.height - 110;
-    for (const t of this.toasts) {
-      ctx.globalAlpha = Math.min(1, t.life);
-      ctx.font = '14px sans-serif';
-      const w = ctx.measureText(t.text).width + 20;
-      ctx.fillStyle = 'rgba(20,24,36,0.85)';
-      ctx.beginPath();
-      ctx.roundRect(14, ty, w, 26, 6);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText(t.text, 24, ty + 6);
-      ty -= 32;
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
   }
-
-  // ---- screens ----
-
-  drawTitle(world) {
-    const { ctx, canvas } = this;
-    ctx.save();
-    ctx.fillStyle = '#141a2e';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    // Sun-soaked city banner.
-    const g = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.55);
-    g.addColorStop(0, '#ff9a62');
-    g.addColorStop(1, '#1b2340');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.55);
-    ctx.fillStyle = '#ffd166';
-    ctx.beginPath();
-    ctx.arc(canvas.width * 0.78, 90, 46, 0, Math.PI * 2);
-    ctx.fill();
-    // Skyline.
-    ctx.fillStyle = '#232a45';
-    const base = canvas.height * 0.55;
-    for (let i = 0; i < 14; i++) {
-      const w = 40 + ((i * 37) % 60);
-      const h = 40 + ((i * 53) % 120);
-      ctx.fillRect(i * (canvas.width / 13), base - h, w, h);
-    }
-    ctx.fillStyle = '#141a2e';
-    ctx.fillRect(0, base, canvas.width, canvas.height - base);
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 54px sans-serif';
-    ctx.fillText('SOLMAR STREETS', canvas.width / 2, 150);
-    ctx.font = '18px sans-serif';
-    ctx.fillStyle = '#ffe66d';
-    ctx.fillText('An open-world crime story — drive, steal, run, survive.', canvas.width / 2, 190);
-    ctx.fillStyle = '#cdd3e0';
-    ctx.font = '15px sans-serif';
-    ctx.fillText('Vera needs a driver. The Breakers own the docks. The city is yours to take.', canvas.width / 2, 216);
-
-    ctx.font = '15px sans-serif';
-    ctx.fillStyle = '#ffffff';
-    const lines = [
-      'WASD / Arrows — move & drive      E — steal / exit car',
-      'SPACE — punch (on foot) / handbrake (in car)      Click — shoot pistol',
-      'M — jobs menu      T — start a taxi fare      P / Esc — pause',
-    ];
-    lines.forEach((l, i) => ctx.fillText(l, canvas.width / 2, 280 + i * 24));
-
-    const hasSave = hasSaveData();
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillStyle = '#2ecc71';
-    ctx.fillText('[ ENTER ]  Start a new game', canvas.width / 2, 380);
-    if (hasSave) {
-      ctx.fillStyle = '#ffd166';
-      ctx.fillText('[ C ]  Continue your saved game', canvas.width / 2, 412);
-    }
-    ctx.fillStyle = '#8a94a6';
-    ctx.font = '13px sans-serif';
-    ctx.fillText('SOLMAR STREETS — 100% original. No network, no downloads, just the city.', canvas.width / 2, canvas.height - 24);
-    ctx.restore();
+  // Toasts.
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 17px sans-serif';
+  let ty = 120;
+  for (const t of G.toasts) {
+    ctx.fillStyle = 'rgba(10,14,24,0.8)';
+    const w = ctx.measureText(t.text).width + 28;
+    ctx.fillRect(vw / 2 - w / 2, ty, w, 30);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(t.text, vw / 2, ty + 21);
+    ty += 38;
   }
+  ctx.textAlign = 'left';
+}
 
-  drawPause(world) {
-    const { ctx, canvas } = this;
-    ctx.save();
-    ctx.fillStyle = 'rgba(10,14,26,0.72)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 40px sans-serif';
-    ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2 - 60);
-    ctx.font = '16px sans-serif';
-    ctx.fillStyle = '#cdd3e0';
-    ctx.fillText('[ P / Esc ] Resume      [ M ] Jobs      [ Q ] Save & quit to title', canvas.width / 2, canvas.height / 2 - 10);
-    ctx.fillStyle = '#ffe66d';
-    ctx.fillText(`Money $${Math.floor(world.entities.player.money)}   •   Missions done: ${Object.values(world.missions.done).filter(Boolean).length} / 4`, canvas.width / 2, canvas.height / 2 + 30);
-    ctx.restore();
+export function interactionPrompt(G) {
+  const p = G.player;
+  const h = landmarkPos('hideout');
+  if (p.onFoot && dist(p.x, p.y, h.x, h.y) < 90 && G.mission.id === null) {
+    return nextMissionIdx(G) >= 0 ? '[E] Talk to Vera — start the next job' : '[E] Talk to Vera';
   }
+  if (p.onFoot) {
+    const car = nearestCar(G, p.x, p.y, 70);
+    if (car) return '[E] Steal the car';
+    const gb = landmarkPos('gunbarn');
+    if (dist(p.x, p.y, gb.x, gb.y) < 80) return '[B] Gun Barn — ammo +30 for $150';
+    return null;
+  }
+  const ps = landmarkPos('pitstop');
+  if (dist(p.x, p.y, ps.x, ps.y) < 95 && p.car && p.car.hp < p.car.maxHp) {
+    return '[F] Pit Stop — repair $120';
+  }
+  if (p.car && p.car.hp >= p.car.maxHp && dist(p.x, p.y, ps.x, ps.y) < 95) {
+    return 'Pit Stop — already mint, no charge';
+  }
+  return '[T] Hail a taxi fare';
+}
 
-  drawWasted(world) {
-    const { ctx, canvas } = this;
-    ctx.save();
-    ctx.fillStyle = 'rgba(60,10,10,0.78)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ff6b6b';
-    ctx.font = 'bold 64px sans-serif';
-    ctx.fillText('WASTED', canvas.width / 2, canvas.height / 2 - 20);
-    ctx.fillStyle = '#ffffff';
+export function drawScreen(G, ctx, vw, vh) {
+  if (G.screen === 'playing') return;
+  ctx.fillStyle = 'rgba(8,10,20,0.82)';
+  ctx.fillRect(0, 0, vw, vh);
+  ctx.textAlign = 'center';
+  if (G.screen === 'title') {
+    ctx.fillStyle = '#f2b705';
+    ctx.font = 'bold 72px sans-serif';
+    ctx.fillText('SOLMAR STREETS', vw / 2, 170);
+    ctx.fillStyle = '#fff';
+    ctx.font = '22px sans-serif';
+    ctx.fillText('An open-world crime game in the spirit of GTA 6', vw / 2, 215);
     ctx.font = '17px sans-serif';
-    ctx.fillText('The city chewed you up. Vera patched you up — minus a little cash.', canvas.width / 2, canvas.height / 2 + 24);
-    ctx.fillStyle = '#ffe66d';
-    ctx.font = 'bold 19px sans-serif';
-    ctx.fillText('[ ENTER ]  Get back on the street', canvas.width / 2, canvas.height / 2 + 70);
-    ctx.restore();
+    ctx.fillStyle = '#cfd6e4';
+    const lines = [
+      'WASD / Arrows — walk & drive    E — enter car / talk to Vera',
+      'Space — punch / handbrake    Click — shoot    R — reload',
+      'T — taxi fare    F — Pit Stop repair    B — Gun Barn ammo',
+      'P / Esc — pause    M — mute    Steal cars, lose the cops, do Vera\'s jobs.',
+    ];
+    lines.forEach((l, i) => ctx.fillText(l, vw / 2, 290 + i * 30));
+    ctx.fillStyle = '#f2b705';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText(hasSave() ? 'Click to play — or press C to Continue your save' : 'Click to play', vw / 2, 470);
+    ctx.fillStyle = '#888';
+    ctx.font = '14px sans-serif';
+    ctx.fillText('100% original: its own city, characters, vehicles, story and music.', vw / 2, 520);
+  } else if (G.screen === 'paused') {
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 56px sans-serif';
+    ctx.fillText('PAUSED', vw / 2, 300);
+    ctx.font = '20px sans-serif';
+    ctx.fillText('P / Esc — resume    Click — resume', vw / 2, 350);
+  } else if (G.screen === 'wasted') {
+    ctx.fillStyle = '#e33f2f';
+    ctx.font = 'bold 80px sans-serif';
+    ctx.fillText('WASTED', vw / 2, 300);
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px sans-serif';
+    ctx.fillText('You wake up at the hideout, $100 lighter.', vw / 2, 350);
+    ctx.fillText('Press Enter to get back up.', vw / 2, 385);
+  } else if (G.screen === 'busted') {
+    ctx.fillStyle = '#2d6bff';
+    ctx.font = 'bold 80px sans-serif';
+    ctx.fillText('BUSTED', vw / 2, 300);
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px sans-serif';
+    ctx.fillText('The police take you in. You post bail and walk out $100 lighter.', vw / 2, 350);
+    ctx.fillText('Press Enter to get back up.', vw / 2, 385);
   }
-
-  drawMissionMenu(world) {
-    const { ctx, canvas } = this;
-    const list = world.missions.availableMissions();
-    ctx.save();
-    ctx.fillStyle = 'rgba(10,14,26,0.8)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 32px sans-serif';
-    ctx.fillText('VERA\'S JOBS', canvas.width / 2, 120);
-    if (list.length === 0) {
-      ctx.font = '18px sans-serif';
-      ctx.fillStyle = '#2ecc71';
-      ctx.fillText('Every job done. Solmar is yours, driver.', canvas.width / 2, 220);
-    }
-    list.forEach((m, i) => {
-      const y = 190 + i * 92;
-      const sel = i === world.menuIndex;
-      ctx.fillStyle = sel ? 'rgba(255,230,109,0.18)' : 'rgba(255,255,255,0.06)';
-      ctx.beginPath();
-      ctx.roundRect(canvas.width / 2 - 320, y - 34, 640, 76, 10);
-      ctx.fill();
-      if (sel) {
-        ctx.strokeStyle = '#ffe66d';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-      ctx.fillStyle = '#ffe66d';
-      ctx.font = 'bold 20px sans-serif';
-      ctx.fillText(`${m.id.toUpperCase()} — ${m.name}   •   $${m.reward}`, canvas.width / 2, y - 6);
-      ctx.fillStyle = '#cdd3e0';
-      ctx.font = '14px sans-serif';
-      ctx.fillText(m.brief, canvas.width / 2, y + 22);
-    });
-    ctx.fillStyle = '#8a94a6';
-    ctx.font = '15px sans-serif';
-    ctx.fillText('[ Up / Down ] choose      [ Enter ] take the job      [ M / Esc ] close', canvas.width / 2, canvas.height - 60);
-    ctx.restore();
-  }
+  ctx.textAlign = 'left';
 }

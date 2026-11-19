@@ -1,39 +1,59 @@
-// Save / load through localStorage. The save holds the player's money,
-// finished missions, position, health, ammo and the time of day — enough
-// that Continue drops you back where you left off.
+// localStorage save / load.
+import { CFG } from './config.js';
 
-const KEY = 'solmar-streets-save-v1';
-
-export function saveGameData(state) {
+export function hasSave() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-    return true;
-  } catch (e) {
+    return !!localStorage.getItem(CFG.saveKey);
+  } catch {
     return false;
   }
 }
 
-export function loadGameData() {
+export function saveGame(G) {
   try {
-    const raw = localStorage.getItem(KEY);
+    const data = {
+      money: G.money,
+      hp: G.hp,
+      ammo: G.ammo,
+      reserve: G.reserve,
+      clock: G.clock,
+      done: G.mission.done,
+      idx: G.mission.idx,
+      earned: G.stats.earned,
+      fares: G.stats.fares,
+      x: G.player.x,
+      y: G.player.y,
+      seed: G.seed,
+    };
+    localStorage.setItem(CFG.saveKey, JSON.stringify(data));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function loadSave() {
+  try {
+    const raw = localStorage.getItem(CFG.saveKey);
     return raw ? JSON.parse(raw) : null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
 
-export function clearSaveData() {
-  try {
-    localStorage.removeItem(KEY);
-  } catch (e) {
-    /* storage unavailable */
+export function applySave(G, data) {
+  if (!data) return false;
+  G.money = data.money;
+  G.hp = data.hp;
+  G.ammo = data.ammo;
+  G.reserve = data.reserve ?? 24;
+  G.clock = data.clock;
+  G.mission.done = data.done || [false, false, false, false];
+  G.stats.earned = data.earned || 0;
+  G.stats.fares = data.fares || 0;
+  if (typeof data.x === 'number') {
+    G.player.x = data.x;
+    G.player.y = data.y;
   }
-}
-
-export function hasSaveData() {
-  try {
-    return localStorage.getItem(KEY) !== null;
-  } catch (e) {
-    return false;
-  }
+  return true;
 }

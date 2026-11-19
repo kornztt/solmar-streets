@@ -11,10 +11,10 @@ commercial game.
 
 ## The city
 
-Solmar is a sun-soaked coastal city of 64 blocks: Old Town, Marina,
-Downtown, the Market and the Harbor. Drive it or walk it — traffic flows,
-pedestrians wander the sidewalks, the day turns to dusk and then to night,
-and the streetlights come on.
+Solmar is a sun-soaked coastal city of 100 blocks: Old Town, Marina,
+Downtown, the Market, the Harbor and Pier 9. Drive it or walk it — traffic
+flows, pedestrians wander the sidewalks, the day turns to dusk and then to
+night, and the streetlights come on.
 
 ## What you can do
 
@@ -27,7 +27,7 @@ and the streetlights come on.
   - **M2 Hot Delivery** — a sealed case to the marina, 90 seconds.
   - **M3 Dockside Takedown** — five Breakers holding the pier.
   - **M4 Harbor Chase** — run down a fleeing courier, take the ledger home.
-- **Taxi fares** — pick up a fare at the stand, drop them off, get paid + tip.
+- **Taxi fares** — pick up a fare, drop them off, get paid + tip.
 - **Combat** — fists and a pistol, aimed with the mouse.
 - **Shops** — the Pit Stop repairs your car, the Gun Barn sells ammo.
 - **Save** — the game autosaves; Continue from the title screen drops you
@@ -38,16 +38,15 @@ and the streetlights come on.
 | Key | Action |
 | --- | --- |
 | WASD / Arrows | Move & drive |
-| E | Steal / exit car |
+| E | Steal / exit car, talk to Vera |
 | Space | Punch (on foot) / handbrake (in car) |
 | Click | Shoot pistol (aim with mouse) |
+| R | Reload |
 | M | Jobs menu |
 | T | Start a taxi fare |
 | F | Pit Stop (in car, nearby) |
 | B | Gun Barn (on foot, nearby) |
-| N | Toggle music |
 | P / Esc | Pause |
-| Shift | Run |
 
 ## Play it
 
@@ -62,15 +61,21 @@ drawn and synthesized in the browser.
 
 ## Layout
 
-- `game/src/config.js` — tuning, palette, vehicles, districts
+- `game/src/config.js` — tuning, palettes, vehicles, districts
 - `game/src/random.js` — seeded RNG (the city is reproducible per seed)
-- `game/src/city.js` — city generation, collision, road queries
-- `game/src/entities.js` — player, cars, traffic AI, police, pedestrians
+- `game/src/state.js` — the shared mutable game state
+- `game/src/city.js` — city generation, roads, collision
+- `game/src/entities.js` — player, cars, traffic AI, pedestrians
 - `game/src/missions.js` — M1–M4 and the taxi job
-- `game/src/combat.js` — fists, pistol, wanted consequences
+- `game/src/combat.js` — fists, pistol, wanted level, police
 - `game/src/audio.js` — WebAudio synth SFX + music loop
 - `game/src/render.js` — world renderer, day/night, minimap
 - `game/src/hud.js` — HUD, menus, toasts
+- `game/src/input.js` — keyboard + mouse
 - `game/src/save.js` — localStorage save / load
 - `game/src/shots.js` — screenshot staging (`?shot=cover|chase|mission|streets`)
 - `game/src/main.js` — boot and game loop
+
+## License
+
+MIT — see [LICENSE](LICENSE).

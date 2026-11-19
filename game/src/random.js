@@ -1,5 +1,4 @@
-// Seeded random numbers — every run of the city is reproducible from a seed,
-// so a mission can be verified on seed 7 and seed 11 and give the same streets.
+// Seeded RNG (mulberry32) + small helpers. Deterministic per seed.
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
@@ -11,49 +10,30 @@ export function mulberry32(seed) {
   };
 }
 
-export function range(rng, min, max) {
-  return min + rng() * (max - min);
-}
-
-export function int(rng, min, max) {
-  return Math.floor(range(rng, min, max + 1));
-}
-
-export function pick(rng, arr) {
-  return arr[Math.floor(rng() * arr.length)];
-}
-
-export function shuffle(rng, arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+export class RNG {
+  constructor(seed) {
+    this.next = mulberry32(seed);
   }
-  return a;
+  range(a, b) {
+    return a + this.next() * (b - a);
+  }
+  int(a, b) {
+    return Math.floor(this.range(a, b + 1));
+  }
+  pick(arr) {
+    return arr[Math.floor(this.next() * arr.length)];
+  }
+  chance(p) {
+    return this.next() < p;
+  }
 }
 
-export function clamp(v, lo, hi) {
-  return v < lo ? lo : v > hi ? hi : v;
-}
-
-export function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-
-export function dist(ax, ay, bx, by) {
-  const dx = bx - ax;
-  const dy = by - ay;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-export function angleTo(ax, ay, bx, by) {
-  return Math.atan2(by - ay, bx - ax);
-}
-
-// Smallest signed turn from angle a to angle b, in (-PI, PI].
-export function angleDiff(a, b) {
+export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+export const dist = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
+export const angTo = (x1, y1, x2, y2) => Math.atan2(y2 - y1, x2 - x1);
+export function angDiff(a, b) {
   let d = b - a;
   while (d > Math.PI) d -= Math.PI * 2;
-  while (d <= -Math.PI) d += Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
   return d;
 }
