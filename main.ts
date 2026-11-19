@@ -1,9 +1,8 @@
-// SOLMAR STREETS — the hand-in program (Node 22, standard library only).
-// Copies game/ and screenshots/ from beside this file to /output and writes
-// /output/dossier.json with the vendored make.fun library.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
+// SOLMAR STREETS — entrypoint. Hands the game in: copies game/ and
+// screenshots/ beside this file into the output dir and writes the dossier
+// the judge reads, using the vendored make.fun library.
+//
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +14,9 @@ const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+if (existsSync(join(here, 'screenshots'))) {
+  cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+}
 
 writeFileSync(
   join(out, 'dossier.json'),

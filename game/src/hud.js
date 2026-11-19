@@ -1,152 +1,131 @@
-// HUD, prompts, toasts, and the title / pause / WASTED / BUSTED screens.
-import { CFG, fmtClock, districtAt } from './config.js';
-import { clamp } from './random.js';
-import { landmarkPos } from './city.js';
-import { missionObjective, nextMissionIdx } from './missions.js';
-import { dist } from './random.js';
-import { nearestCar } from './entities.js';
-import { hasSave } from './save.js';
+// HUD and menu screens, drawn on the same canvas as the world.
+import { CFG } from './config.js';
+import { isNight } from './render.js';
+import { loadGame } from './save.js';
 
-export function drawHud(G, ctx, vw, vh) {
+function fmtClock(hours, minutes) {
+  const h = Math.floor(hours) % 24;
+  const m = Math.floor(minutes);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+export function drawHUD(G, ctx, W, H) {
+  const p = G.player;
   ctx.textAlign = 'left';
-  // Top-left: money, health, ammo.
+  // money + wanted
   ctx.fillStyle = 'rgba(10,14,24,0.75)';
-  ctx.fillRect(12, 12, 250, 86);
-  ctx.fillStyle = '#f2b705';
-  ctx.font = 'bold 26px sans-serif';
-  ctx.fillText(`$${G.money}`, 24, 44);
-  ctx.fillStyle = '#fff';
-  ctx.font = '14px sans-serif';
-  ctx.fillText(`HP ${Math.ceil(G.hp)}`, 24, 66);
-  ctx.fillStyle = '#222';
-  ctx.fillRect(70, 56, 120, 10);
-  ctx.fillStyle = G.hp > 40 ? '#37b24d' : '#e33f2f';
-  ctx.fillRect(70, 56, 120 * clamp(G.hp / 100, 0, 1), 10);
-  ctx.fillStyle = '#fff';
-  ctx.fillText(`Ammo ${G.ammo} (+${G.reserve})`, 24, 88);
-  // Top-right: wanted stars, clock, district.
-  ctx.textAlign = 'right';
-  ctx.fillStyle = 'rgba(10,14,24,0.75)';
-  ctx.fillRect(vw - 232, 12, 220, 66);
-  let stars = '';
-  for (let i = 0; i < 5; i++) stars += i < G.wanted ? '★' : '☆';
-  ctx.fillStyle = G.wanted > 0 ? '#ff5a5a' : '#888';
+  ctx.fillRect(10, 10, 260, 64);
+  ctx.fillStyle = '#7ee787';
   ctx.font = 'bold 22px sans-serif';
-  ctx.fillText(stars, vw - 24, 42);
-  ctx.fillStyle = '#fff';
-  ctx.font = '14px sans-serif';
-  const bx = Math.floor(G.player.x / CFG.pitch);
-  const by = Math.floor(G.player.y / CFG.pitch);
-  ctx.fillText(`${fmtClock(G.clock)}  ${districtAt(bx, by)}`, vw - 24, 64);
-  // Objective, bottom-left.
-  ctx.textAlign = 'left';
+  ctx.fillText(`$${G.money}`, 22, 38);
+  ctx.fillStyle = '#ffd700';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText('★'.repeat(p.wanted) + '☆'.repeat(5 - p.wanted), 22, 64);
+  // clock
+  const night = isNight(G.time.hours);
   ctx.fillStyle = 'rgba(10,14,24,0.75)';
-  ctx.fillRect(12, vh - 52, 560, 40);
-  ctx.fillStyle = '#f2b705';
-  ctx.font = 'bold 16px sans-serif';
-  ctx.fillText(missionObjective(G), 24, vh - 26);
-  if (G.taxi.active) {
-    ctx.fillStyle = '#19b8a6';
-    ctx.fillText(`Taxi: ${Math.ceil(G.taxi.timer)}s — $${G.taxi.pay}`, 24, vh - 62);
-  }
-  // Interaction prompt.
-  const prompt = interactionPrompt(G);
-  if (prompt) {
-    ctx.fillStyle = 'rgba(10,14,24,0.8)';
-    ctx.fillRect(vw / 2 - 190, vh - 120, 380, 34);
+  ctx.fillRect(W - 170, 10, 160, 40);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${night ? '🌙' : '☀'} ${fmtClock(G.time.hours, G.time.minutes)}  Day ${G.time.day}`, W - 22, 38);
+  ctx.textAlign = 'left';
+  // health + ammo
+  ctx.fillStyle = 'rgba(10,14,24,0.75)';
+  ctx.fillRect(10, H - 66, 240, 56);
+  ctx.fillStyle = '#e33';
+  ctx.fillRect(22, H - 52, 140 * (p.hp / CFG.maxHp), 14);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+  ctx.strokeRect(22, H - 52, 140, 14);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(`HP ${Math.ceil(p.hp)}`, 170, H - 40);
+  ctx.fillText(`Ammo ${p.ammo}`, 22, H - 18);
+  // speed when driving
+  if (p.inCar) {
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(prompt, vw / 2, vh - 97);
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${Math.round(Math.abs(p.inCar.speed) * 0.36 * 3.6)} km/h`, W - 220, H - 24);
     ctx.textAlign = 'left';
   }
-  // Toasts.
+  // objective
+  ctx.fillStyle = 'rgba(10,14,24,0.75)';
+  const obj = G.objective || 'See Vera at her office to start a job.';
+  ctx.font = 'bold 15px sans-serif';
+  const w = ctx.measureText(obj).width + 24;
+  ctx.fillRect((W - w) / 2, 10, w, 30);
+  ctx.fillStyle = '#ffd76e';
   ctx.textAlign = 'center';
-  ctx.font = 'bold 17px sans-serif';
-  let ty = 120;
-  for (const t of G.toasts) {
+  ctx.fillText(obj, W / 2, 30);
+  ctx.textAlign = 'left';
+  // mission timer
+  if (G.mission.active && G.mission.timer > 0) {
+    ctx.fillStyle = G.mission.timer < 30 ? '#e33' : '#fff';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`⏱ ${Math.ceil(G.mission.timer)}s`, W / 2, 62);
+    ctx.textAlign = 'left';
+  }
+  // nearby prompt
+  if (G.prompt) {
     ctx.fillStyle = 'rgba(10,14,24,0.8)';
-    const w = ctx.measureText(t.text).width + 28;
-    ctx.fillRect(vw / 2 - w / 2, ty, w, 30);
+    ctx.font = 'bold 15px sans-serif';
+    const pw = ctx.measureText(G.prompt).width + 24;
+    ctx.fillRect((W - pw) / 2, H - 110, pw, 30);
     ctx.fillStyle = '#fff';
-    ctx.fillText(t.text, vw / 2, ty + 21);
-    ty += 38;
+    ctx.textAlign = 'center';
+    ctx.fillText(G.prompt, W / 2, H - 90);
+    ctx.textAlign = 'left';
   }
-  ctx.textAlign = 'left';
 }
 
-export function interactionPrompt(G) {
-  const p = G.player;
-  const h = landmarkPos('hideout');
-  if (p.onFoot && dist(p.x, p.y, h.x, h.y) < 90 && G.mission.id === null) {
-    return nextMissionIdx(G) >= 0 ? '[E] Talk to Vera — start the next job' : '[E] Talk to Vera';
-  }
-  if (p.onFoot) {
-    const car = nearestCar(G, p.x, p.y, 70);
-    if (car) return '[E] Steal the car';
-    const gb = landmarkPos('gunbarn');
-    if (dist(p.x, p.y, gb.x, gb.y) < 80) return '[B] Gun Barn — ammo +30 for $150';
-    return null;
-  }
-  const ps = landmarkPos('pitstop');
-  if (dist(p.x, p.y, ps.x, ps.y) < 95 && p.car && p.car.hp < p.car.maxHp) {
-    return '[F] Pit Stop — repair $120';
-  }
-  if (p.car && p.car.hp >= p.car.maxHp && dist(p.x, p.y, ps.x, ps.y) < 95) {
-    return 'Pit Stop — already mint, no charge';
-  }
-  return '[T] Hail a taxi fare';
-}
-
-export function drawScreen(G, ctx, vw, vh) {
-  if (G.screen === 'playing') return;
-  ctx.fillStyle = 'rgba(8,10,20,0.82)';
-  ctx.fillRect(0, 0, vw, vh);
+function panel(ctx, W, H, title, lines, foot) {
+  ctx.fillStyle = 'rgba(5,8,18,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#f5a623';
+  ctx.font = 'bold 44px sans-serif';
   ctx.textAlign = 'center';
-  if (G.screen === 'title') {
-    ctx.fillStyle = '#f2b705';
-    ctx.font = 'bold 72px sans-serif';
-    ctx.fillText('SOLMAR STREETS', vw / 2, 170);
-    ctx.fillStyle = '#fff';
-    ctx.font = '22px sans-serif';
-    ctx.fillText('An open-world crime game in the spirit of GTA 6', vw / 2, 215);
-    ctx.font = '17px sans-serif';
-    ctx.fillStyle = '#cfd6e4';
-    const lines = [
-      'WASD / Arrows — walk & drive    E — enter car / talk to Vera',
-      'Space — punch / handbrake    Click — shoot    R — reload',
-      'T — taxi fare    F — Pit Stop repair    B — Gun Barn ammo',
-      'P / Esc — pause    M — mute    Steal cars, lose the cops, do Vera\'s jobs.',
-    ];
-    lines.forEach((l, i) => ctx.fillText(l, vw / 2, 290 + i * 30));
-    ctx.fillStyle = '#f2b705';
-    ctx.font = 'bold 24px sans-serif';
-    ctx.fillText(hasSave() ? 'Click to play — or press C to Continue your save' : 'Click to play', vw / 2, 470);
-    ctx.fillStyle = '#888';
-    ctx.font = '14px sans-serif';
-    ctx.fillText('100% original: its own city, characters, vehicles, story and music.', vw / 2, 520);
-  } else if (G.screen === 'paused') {
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 56px sans-serif';
-    ctx.fillText('PAUSED', vw / 2, 300);
-    ctx.font = '20px sans-serif';
-    ctx.fillText('P / Esc — resume    Click — resume', vw / 2, 350);
-  } else if (G.screen === 'wasted') {
-    ctx.fillStyle = '#e33f2f';
-    ctx.font = 'bold 80px sans-serif';
-    ctx.fillText('WASTED', vw / 2, 300);
-    ctx.fillStyle = '#fff';
-    ctx.font = '20px sans-serif';
-    ctx.fillText('You wake up at the hideout, $100 lighter.', vw / 2, 350);
-    ctx.fillText('Press Enter to get back up.', vw / 2, 385);
-  } else if (G.screen === 'busted') {
-    ctx.fillStyle = '#2d6bff';
-    ctx.font = 'bold 80px sans-serif';
-    ctx.fillText('BUSTED', vw / 2, 300);
-    ctx.fillStyle = '#fff';
-    ctx.font = '20px sans-serif';
-    ctx.fillText('The police take you in. You post bail and walk out $100 lighter.', vw / 2, 350);
-    ctx.fillText('Press Enter to get back up.', vw / 2, 385);
-  }
+  ctx.fillText(title, W / 2, H / 2 - 120);
+  ctx.fillStyle = '#fff';
+  ctx.font = '18px sans-serif';
+  lines.forEach((ln, i) => ctx.fillText(ln, W / 2, H / 2 - 70 + i * 28));
+  ctx.fillStyle = '#ffd76e';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(foot, W / 2, H / 2 + 60);
   ctx.textAlign = 'left';
+}
+
+export function drawTitle(G, ctx, W, H) {
+  const hasSave = !!loadGame();
+  panel(ctx, W, H, 'SOLMAR STREETS', [
+    'An open-world crime game in the spirit of GTA.',
+    'Drive, steal cars, outrun the police, run jobs for Vera.',
+    'WASD drive / walk  •  Mouse aim, click to shoot  •  Space punch',
+    'E enter a car / interact  •  P pause  •  M mute',
+    '',
+    'Five story missions, a taxi job and courier runs.',
+    'Day and night, a living city, and a wanted level that answers back.',
+  ], hasSave ? 'Click to play — or press C to Continue your save' : 'Click to play');
+}
+
+export function drawPause(G, ctx, W, H) {
+  panel(ctx, W, H, 'PAUSED', [
+    `Money $${G.money}  •  Jobs done: ${G.missionsDone.length}/5`,
+    G.objective || '',
+  ], 'Press P to resume');
+}
+
+export function drawWasted(G, ctx, W, H) {
+  panel(ctx, W, H, 'WASTED', [
+    'The hospital patched you up.',
+    `-$${CFG.respawnFine} hospital bill.`,
+  ], 'Press Enter to get back on the streets');
+}
+
+export function drawBusted(G, ctx, W, H) {
+  panel(ctx, W, H, 'BUSTED', [
+    'The Solmar PD took you in.',
+    `-$${CFG.bustedFine} bail. The job is off.`,
+  ], 'Press Enter to get back on the streets');
 }

@@ -1,69 +1,94 @@
-// WebAudio synth SFX + a small music loop. Everything is guarded: no audio
-// context (headless, no gesture yet) means silence, never an error.
-let ac = null;
-let master = null;
-
-export function initAudio() {
-  try {
-    if (!ac) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return false;
-      ac = new Ctx();
-      master = ac.createGain();
-      master.gain.value = 0.16;
-      master.connect(ac.destination);
-    }
-    if (ac.state === 'suspended') ac.resume();
-    return true;
-  } catch {
-    return false;
+// WebAudio synth: engine hum, gunshots, chimes, siren and a music loop.
+// Everything is guarded: no audio context exists until the first click,
+// and every call is safe when sound is off.
+export class AudioSys {
+  constructor() {
+    this.ctx = null; this.master = null; this.muted = false;
+    this.engineOsc = null; this.engineGain = null; this.musicTimer = null;
+    this.musicStep = 0;
   }
-}
-
-function tone(freq, dur, type = 'square', vol = 1, slideTo = null) {
-  if (!ac || !master) return;
-  try {
-    const o = ac.createOscillator();
-    const g = ac.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, ac.currentTime);
-    if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), ac.currentTime + dur);
-    g.gain.setValueAtTime(vol, ac.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
-    o.connect(g);
-    g.connect(master);
-    o.start();
-    o.stop(ac.currentTime + dur + 0.02);
-  } catch { /* silence */ }
-}
-
-export function sfx(name) {
-  if (!ac) return;
-  try {
-    switch (name) {
-      case 'shoot': tone(880, 0.09, 'square', 0.7, 220); break;
-      case 'punch': tone(160, 0.12, 'sawtooth', 0.8, 60); break;
-      case 'cash': tone(660, 0.1, 'sine', 0.9); setTimeout(() => tone(990, 0.16, 'sine', 0.9), 90); break;
-      case 'pickup': tone(520, 0.08, 'sine', 0.8, 780); break;
-      case 'crash': tone(120, 0.25, 'sawtooth', 0.9, 40); break;
-      case 'click': tone(440, 0.05, 'sine', 0.6); break;
-      case 'siren': tone(700, 0.4, 'sine', 0.25, 950); break;
-      case 'fail': tone(220, 0.4, 'sawtooth', 0.7, 110); break;
-      case 'repair': tone(330, 0.12, 'triangle', 0.8, 660); break;
-      default: break;
-    }
-  } catch { /* silence */ }
-}
-
-// A sparse bassline loop: one note per beat while playing.
-const BASS = [55, 55, 65.4, 49, 55, 55, 73.4, 65.4];
-export function musicTick(G, dt) {
-  if (!ac || G.screen !== 'playing') return;
-  G.musicT += dt;
-  const beat = 0.32;
-  const n = Math.floor(G.musicT / beat);
-  if (G.musicT - n * beat < dt) {
-    tone(BASS[n % BASS.length], 0.28, 'triangle', 0.5);
-    if (n % 4 === 2) tone(BASS[n % BASS.length] * 2, 0.12, 'sine', 0.25);
+  init() {
+    if (this.ctx) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.35;
+      this.master.connect(this.ctx.destination);
+      this.startEngine();
+      this.startMusic();
+    } catch (e) { this.ctx = null; }
   }
+  startEngine() {
+    try {
+      this.engineOsc = this.ctx.createOscillator();
+      this.engineOsc.type = 'sawtooth';
+      this.engineOsc.frequency.value = 50;
+      this.engineGain = this.ctx.createGain();
+      this.engineGain.gain.value = 0;
+      this.engineOsc.connect(this.engineGain);
+      this.engineGain.connect(this.master);
+      this.engineOsc.start();
+    } catch (e) { /* engine stays silent */ }
+  }
+  setEngine(speed, top) {
+    if (!this.ctx || !this.engineOsc) return;
+    const t = this.ctx.currentTime;
+    this.engineOsc.frequency.setTargetAtTime(50 + (speed / top) * 90, t, 0.1);
+    this.engineGain.gain.setTargetAtTime(speed > 10 ? 0.05 : 0, t, 0.1);
+  }
+  startMusic() {
+    // a slow bassline loop: A minor, one note per beat, 112 bpm
+    const notes = [110, 0, 130.8, 0, 98, 0, 130.8, 146.8];
+    const stepMs = 60000 / 112 / 2;
+    this.musicTimer = setInterval(() => {
+      if (this.muted || !this.ctx) return;
+      const f = notes[this.musicStep % notes.length];
+      this.musicStep++;
+      if (!f) return;
+      try {
+        const o = this.ctx.createOscillator();
+        o.type = 'triangle'; o.frequency.value = f;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.09, this.ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.22);
+        o.connect(g); g.connect(this.master);
+        o.start(); o.stop(this.ctx.currentTime + 0.24);
+      } catch (e) { /* skip a note */ }
+    }, stepMs);
+  }
+  blip(freq, dur, type = 'sine', vol = 0.15) {
+    if (!this.ctx || this.muted) return;
+    try {
+      const o = this.ctx.createOscillator();
+      o.type = type; o.frequency.value = freq;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(vol, this.ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+      o.connect(g); g.connect(this.master);
+      o.start(); o.stop(this.ctx.currentTime + dur + 0.02);
+    } catch (e) { /* silent */ }
+  }
+  noise(dur, vol = 0.3) {
+    if (!this.ctx || this.muted) return;
+    try {
+      const len = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const s = this.ctx.createBufferSource();
+      s.buffer = buf;
+      const g = this.ctx.createGain();
+      g.gain.value = vol;
+      s.connect(g); g.connect(this.master);
+      s.start();
+    } catch (e) { /* silent */ }
+  }
+  shot() { this.noise(0.12, 0.35); this.blip(180, 0.08, 'square', 0.12); }
+  thud() { this.noise(0.08, 0.2); }
+  swing() { this.blip(300, 0.06, 'sine', 0.05); }
+  pickup() { this.blip(660, 0.1); setTimeout(() => this.blip(880, 0.14), 90); }
+  hurt() { this.blip(140, 0.2, 'sawtooth', 0.18); }
+  siren() { this.blip(720, 0.18, 'sine', 0.06); setTimeout(() => this.blip(540, 0.18, 'sine', 0.06), 200); }
+  toggleMute() { this.muted = !this.muted; return this.muted; }
 }

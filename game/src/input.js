@@ -1,29 +1,37 @@
-// Keyboard + mouse input, stored on the shared state.
-export function bindInput(G, canvas) {
-  const down = (e) => {
-    G.keys[e.code] = true;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
-    if (window.__solmarKey) window.__solmarKey(e.code, true);
-  };
-  const up = (e) => {
-    G.keys[e.code] = false;
-    if (window.__solmarKey) window.__solmarKey(e.code, false);
-  };
-  window.addEventListener('keydown', down);
-  window.addEventListener('keyup', up);
-  canvas.addEventListener('mousemove', (e) => {
-    const r = canvas.getBoundingClientRect();
-    G.mouse.x = e.clientX - r.left;
-    G.mouse.y = e.clientY - r.top;
-  });
-  canvas.addEventListener('mousedown', (e) => {
-    if (e.button === 0) {
-      G.mouse.down = true;
-      if (window.__solmarClick) window.__solmarClick(G.mouse.x, G.mouse.y);
-    }
-  });
-  window.addEventListener('mouseup', () => {
-    G.mouse.down = false;
-  });
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+// Keyboard and mouse input, plus the screen-space to world-space aim.
+export class Input {
+  constructor(canvas) {
+    this.keys = {};
+    this.mouse = { x: 0, y: 0, down: false, clicked: false };
+    this.pressed = {}; // edge-triggered keys, consumed once per frame
+    window.addEventListener('keydown', (e) => {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+      if (!this.keys[e.key.toLowerCase()]) this.pressed[e.key.toLowerCase()] = true;
+      this.keys[e.key.toLowerCase()] = true;
+    });
+    window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
+    canvas.addEventListener('mousemove', (e) => {
+      const r = canvas.getBoundingClientRect();
+      this.mouse.x = e.clientX - r.left; this.mouse.y = e.clientY - r.top;
+    });
+    canvas.addEventListener('mousedown', (e) => {
+      this.mouse.down = true; this.mouse.clicked = true;
+      const r = canvas.getBoundingClientRect();
+      this.mouse.x = e.clientX - r.left; this.mouse.y = e.clientY - r.top;
+    });
+    window.addEventListener('mouseup', () => { this.mouse.down = false; });
+  }
+  down(k) { return !!this.keys[k]; }
+  wasPressed(k) { return !!this.pressed[k]; }
+  endFrame() { this.pressed = {}; this.mouse.clicked = false; }
+  // movement vector from WASD/arrows, normalised
+  moveVector() {
+    let x = 0, y = 0;
+    if (this.down('w') || this.down('arrowup')) y -= 1;
+    if (this.down('s') || this.down('arrowdown')) y += 1;
+    if (this.down('a') || this.down('arrowleft')) x -= 1;
+    if (this.down('d') || this.down('arrowright')) x += 1;
+    const len = Math.hypot(x, y);
+    return len > 0 ? { x: x / len, y: y / len } : { x: 0, y: 0 };
+  }
 }

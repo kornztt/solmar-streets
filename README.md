@@ -1,81 +1,28 @@
 # SOLMAR STREETS
-
 [![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
 [![rank](https://make.fun/badge/gta6-01/kornztt/solmar-streets/rank.svg)](https://make.fun/bounty/gta6-01)
 [![reward](https://make.fun/badge/gta6-01/kornztt/solmar-streets/reward.svg)](https://make.fun/bounty/gta6-01)
 
-An open-world crime game in the spirit of GTA 6, built from scratch for the
-[make.fun gta6-01 bounty](https://make.fun/bounty/gta6-01). 100% original:
-its own city, characters, vehicles, story, art and music. Nothing from any
-commercial game.
+An open-world crime game in the spirit of GTA 6, playable in a desktop browser from static files — no network, no assets, no libraries. Built for the [make.fun gta6-01 bounty](https://make.fun/bounty/gta6-01).
 
 ## The city
 
-Solmar is a sun-soaked coastal city of 100 blocks: Old Town, Marina,
-Downtown, the Market, the Harbor and Pier 9. Drive it or walk it — traffic
-flows, pedestrians wander the sidewalks, the day turns to dusk and then to
-night, and the streetlights come on.
+Solmar is a 3200×3200 open world: a road grid with traffic, eight kinds of pedestrians, parked cars to steal, and named landmarks — Vera's Office, the Harbor, Solmar Bank, the Diner, the Pit Stop, the Gun Barn, Rooftop Plaza, and the Courier Depot. A full day/night cycle changes the light; after dark your headlights cut through the night.
 
 ## What you can do
 
-- **Steal and drive** — six car models (sedan, sports, truck, hatch, van,
-  taxi) in a dozen colours. Parked cars are yours for the taking.
-- **Wanted 0–5** — steal a car, hit a pedestrian or fire a shot and the
-  police come. Lose them, wait it out, and the heat fades.
-- **Four story missions from Vera**, your fixer at the hideout:
-  - **M1 The Getaway** — pick up a runner, get home before the heat closes in.
-  - **M2 Hot Delivery** — a sealed case to the marina, 90 seconds.
-  - **M3 Dockside Takedown** — five Breakers holding the pier.
-  - **M4 Harbor Chase** — run down a fleeing courier, take the ledger home.
-- **Taxi fares** — pick up a fare, drop them off, get paid + tip.
-- **Combat** — fists and a pistol, aimed with the mouse.
-- **Shops** — the Pit Stop repairs your car, the Gun Barn sells ammo.
-- **Save** — the game autosaves; Continue from the title screen drops you
-  back where you left off.
+- **Drive and steal** — 6 car models in 12 colours, traffic AI, carjacking, ramming.
+- **Five story missions for Vera** — M1 The Getaway, M2 Hot Delivery, M3 Dockside Takedown, M4 Harbor Chase, and the night-time M5 Night Heist (stop the bank van, grab the cash bags, reach the stash while the police close in).
+- **Two repeatable side jobs** — taxi fares and timed courier deliveries.
+- **Wanted level 0–5** — police cars chase and ram, officers on foot try to bust you; lay low and the heat fades.
+- **Combat** — punch, pistol, drive-bys; shops sell healing, repairs and ammo.
+- **HUD and minimap** — money, wanted stars, health, ammo, clock, mission objective, live minimap.
+- **Save** — autosave plus Continue from the title screen; synth engine hum, gunshots and a music loop (M mutes).
 
 ## Controls
 
-| Key | Action |
-| --- | --- |
-| WASD / Arrows | Move & drive |
-| E | Steal / exit car, talk to Vera |
-| Space | Punch (on foot) / handbrake (in car) |
-| Click | Shoot pistol (aim with mouse) |
-| R | Reload |
-| M | Jobs menu |
-| T | Start a taxi fare |
-| F | Pit Stop (in car, nearby) |
-| B | Gun Barn (on foot, nearby) |
-| P / Esc | Pause |
+WASD / arrows drive and walk • Mouse aim, click to shoot • Space punch • E enter a car / interact • P pause • M mute • Enter respawn after WASTED / BUSTED.
 
 ## Play it
 
-Serve `game/` with any static server and open `index.html`:
-
-```sh
-cd game && python3 -m http.server 8123
-```
-
-No build step, no network requests, no assets to download — everything is
-drawn and synthesized in the browser.
-
-## Layout
-
-- `game/src/config.js` — tuning, palettes, vehicles, districts
-- `game/src/random.js` — seeded RNG (the city is reproducible per seed)
-- `game/src/state.js` — the shared mutable game state
-- `game/src/city.js` — city generation, roads, collision
-- `game/src/entities.js` — player, cars, traffic AI, pedestrians
-- `game/src/missions.js` — M1–M4 and the taxi job
-- `game/src/combat.js` — fists, pistol, wanted level, police
-- `game/src/audio.js` — WebAudio synth SFX + music loop
-- `game/src/render.js` — world renderer, day/night, minimap
-- `game/src/hud.js` — HUD, menus, toasts
-- `game/src/input.js` — keyboard + mouse
-- `game/src/save.js` — localStorage save / load
-- `game/src/shots.js` — screenshot staging (`?shot=cover|chase|mission|streets`)
-- `game/src/main.js` — boot and game loop
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+Open `game/index.html` in a desktop browser, or serve the folder (`python3 -m http.server` in `game/`) and open http://localhost:8000.
