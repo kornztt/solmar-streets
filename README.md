@@ -1,66 +1,75 @@
 # SOLMAR STREETS
 
-[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
-[![rank](https://make.fun/badge/gta6-01/kornztt/solmar-streets/rank.svg)](https://make.fun/bounty/gta6-01)
-[![reward](https://make.fun/badge/gta6-01/kornztt/solmar-streets/reward.svg)](https://make.fun/bounty/gta6-01)
+[![make.fun](https://make.fun/badge.svg)](https://make.fun/bounty/gta6-01)
+[![gta6-01](https://make.fun/bounty/gta6-01/badge.svg)](https://make.fun/bounty/gta6-01)
 
-An open-world crime game in the spirit of GTA 6, built for the
-[make.fun "Make GTA 6" bounty](https://make.fun/bounty/gta6-01).
-100% original: its city, characters, vehicles, story, art, sound and music
-are all its own — nothing from Rockstar Games or any other commercial game.
+An open-world crime game in the spirit of GTA 6, built from scratch for the
+[make.fun gta6-01 bounty](https://make.fun/bounty/gta6-01). 100% original:
+its own city, characters, vehicles, story, art and music. Nothing from any
+commercial game.
 
-## The game
+## The city
 
-Solmar is a sun-soaked coastal city. You start on foot at the hideout, broke
-and unknown. Mara, the fixer who runs the south side, has work for you:
+Solmar is a sun-soaked coastal city of 64 blocks: Old Town, Marina,
+Downtown, the Market and the Harbor. Drive it or walk it — traffic flows,
+pedestrians wander the sidewalks, the day turns to dusk and then to night,
+and the streetlights come on.
 
-- **The Getaway** — steal the getaway car and reach the north hideout while
-  the cops chase you, on the clock.
-- **Hot Delivery** — pick up a package on 6th Street and deliver it across
-  town, fast.
-- **Dockside Takedown** — the Viper crew is waiting at Pier 9. Put all five
-  of them down with the pistol, then report back to Mara.
-- **Taxi fares** — pick up passengers and get paid, with a tip for a fast
-  drop-off. Repeatable, whenever you need cash.
+## What you can do
 
-Around the story: steal any car on the street, traffic and pedestrians,
-a wanted level from 0 to 5 stars with police cruisers that chase and ram
-you (and officers on foot who will bust you at 3 stars and up), punch and
-pistol combat, Pit Stop repairs, Gun Barn ammo, a HUD with a minimap, a
-save that keeps your money and finished missions, and a synth soundtrack.
+- **Steal and drive** — six car models (sedan, sports, truck, hatch, van,
+  taxi) in a dozen colours. Parked cars are yours for the taking.
+- **Wanted 0–5** — steal a car, hit a pedestrian or fire a shot and the
+  police come. Lose them, wait it out, and the heat fades.
+- **Four story missions from Vera**, your fixer at the hideout:
+  - **M1 The Getaway** — pick up a runner, get home before the heat closes in.
+  - **M2 Hot Delivery** — a sealed case to the marina, 90 seconds.
+  - **M3 Dockside Takedown** — five Breakers holding the pier.
+  - **M4 Harbor Chase** — run down a fleeing courier, take the ledger home.
+- **Taxi fares** — pick up a fare at the stand, drop them off, get paid + tip.
+- **Combat** — fists and a pistol, aimed with the mouse.
+- **Shops** — the Pit Stop repairs your car, the Gun Barn sells ammo.
+- **Save** — the game autosaves; Continue from the title screen drops you
+  back where you left off.
 
-## Play it
-
-Open `game/index.html` in a desktop browser (or serve `game/` with any
-static server). No network, no build step, no assets to download.
+## Controls
 
 | Key | Action |
 | --- | --- |
-| WASD / arrows | Walk / drive |
-| Shift | Sprint |
-| E | Enter a car, talk to Mara, repair, buy ammo |
-| F | Punch |
-| Mouse | Aim, click to shoot |
-| R | Reload |
+| WASD / Arrows | Move & drive |
+| E | Steal / exit car |
+| Space | Punch (on foot) / handbrake (in car) |
+| Click | Shoot pistol (aim with mouse) |
+| M | Jobs menu |
+| T | Start a taxi fare |
+| F | Pit Stop (in car, nearby) |
+| B | Gun Barn (on foot, nearby) |
+| N | Toggle music |
 | P / Esc | Pause |
-| M | Mute |
+| Shift | Run |
+
+## Play it
+
+Serve `game/` with any static server and open `index.html`:
+
+```sh
+cd game && python3 -m http.server 8123
+```
+
+No build step, no network requests, no assets to download — everything is
+drawn and synthesized in the browser.
 
 ## Layout
 
-- `main.ts` — the hand-in program: copies `game/` and `screenshots/` out
-  and writes `dossier.json` with the vendored make.fun library.
-- `game/index.html` — the page; `game/src/` holds the game, one job per
-  file: `config`, `random`, `audio`, `city`, `entities`, `world`,
-  `missions`, `render`, `input`, `save`, `shots`, `main`.
-- `vendor/makefun-game.ts` — the kit's dossier library, unchanged.
-- `screenshots/` — four real renders of the game, taken in a browser.
-
-## Build the dossier
-
-```sh
-mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-```
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+- `game/src/config.js` — tuning, palette, vehicles, districts
+- `game/src/random.js` — seeded RNG (the city is reproducible per seed)
+- `game/src/city.js` — city generation, collision, road queries
+- `game/src/entities.js` — player, cars, traffic AI, police, pedestrians
+- `game/src/missions.js` — M1–M4 and the taxi job
+- `game/src/combat.js` — fists, pistol, wanted consequences
+- `game/src/audio.js` — WebAudio synth SFX + music loop
+- `game/src/render.js` — world renderer, day/night, minimap
+- `game/src/hud.js` — HUD, menus, toasts
+- `game/src/save.js` — localStorage save / load
+- `game/src/shots.js` — screenshot staging (`?shot=cover|chase|mission|streets`)
+- `game/src/main.js` — boot and game loop

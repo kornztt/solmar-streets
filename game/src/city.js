@@ -1,147 +1,262 @@
-// The city of Solmar: a road grid, buildings, two parks, the dockyard and
-// the named zones. Generation is seeded, so the same seed builds the same city.
-import { ROAD_X, ROAD_Y, ROAD_HALF, WORLD_W, WORLD_H, COLORS, ZONES } from './config.js';
-import { RNG, clamp } from './random.js';
+// City generation for SOLMAR STREETS.
+// The city is a GRID x GRID of blocks separated by roads. Every building,
+// park and shop sits INSIDE a block — never on a road — so no mission NPC
+// or hideout can ever spawn in traffic. All placement is seeded, so the
+// same seed builds the same city on every machine.
 
-export function buildCity(seed) {
-  const rng = new RNG(seed);
-  const buildings = [];
-  const parks = [];
-  const containers = [];
+import { BLOCK, ROAD, GRID, CITY, DISTRICTS } from './config.js';
+import { mulberry32, range, int, pick, shuffle, dist } from './random.js';
 
-  // Block bounds between neighbouring roads.
-  const blockXs = [];
-  for (let i = 0; i < ROAD_X.length - 1; i += 1) {
-    blockXs.push([ROAD_X[i] + ROAD_HALF + 14, ROAD_X[i + 1] - ROAD_HALF - 14]);
+// Centre of the road that runs along grid line i (0..GRID).
+export function roadCenter(i) {
+  return i * (BLOCK + ROAD) + ROAD / 2;
+}
+
+// Centre of block (bx, by) in world coordinates.
+export function blockCenter(bx, by) {
+  return {
+    x: ROAD + bx * (BLOCK + ROAD) + BLOCK / 2,
+    y: ROAD + by * (BLOCK + ROAD) + BLOCK / 2,
+  };
+}
+
+// A point on a road, given a block corner and a small offset along the road.
+export function roadPoint(bx, by, along = 0.5) {
+  return {
+    x: roadCenter(bx) + (along - 0.5) * ROAD * 0.6,
+    y: roadCenter(by) + (along - 0.5) * ROAD * 0.6,
+  };
+}
+
+export class City {
+  constructor(seed) {
+    this.seed = seed;
+    this.rng = mulberry32(seed);
+    this.size = CITY;
+    this.blocks = []; // {bx, by, kind, buildings[], trees[], district}
+    this.buildings = []; // flat list of {x, y, w, h, color, roof, height}
+    this.sites = {}; // named places: hideout, pitstop, gunbarn, pier, taxiStand
+    this.parkingSpots = []; // {x, y, angle} on-street parking bays
+    this.build();
   }
-  const blockYs = [];
-  for (let i = 0; i < ROAD_Y.length - 1; i += 1) {
-    blockYs.push([ROAD_Y[i] + ROAD_HALF + 14, ROAD_Y[i + 1] - ROAD_HALF - 14]);
-  }
 
-  // Two parks and two shop lots replace buildings in fixed blocks.
-  const parkBlocks = ['1,1', '5,3'];
-  const lotBlocks = { '2,1': 'pitstop', '5,2': 'gunbarn' };
-  // The hideout block (south-west, between roads x 200-600, y 1800-2000)
-  // is reserved: Mara's building goes there instead of random ones.
-  const hideoutBlock = '0,4';
+  build() {
+    const rng = this.rng;
+    const districtOf = (bx, by) => {
+      if (by >= GRID - 1) return 'Harbor';
+      if (bx >= GRID - 2 && by >= GRID - 3) return 'The Docks';
+      return pick(mulberry32(bx * 31 + by * 7 + this.seed), DISTRICTS);
+    };
 
-  for (let bx = 0; bx < blockXs.length; bx += 1) {
-    for (let by = 0; by < blockYs.length; by += 1) {
-      const key = bx + ',' + by;
-      const [x0, x1] = blockXs[bx];
-      const [y0, y1] = blockYs[by];
-      if (parkBlocks.includes(key)) {
-        parks.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, trees: [] });
-        const park = parks[parks.length - 1];
-        for (let t = 0; t < 12; t += 1) {
-          park.trees.push({ x: rng.range(x0 + 20, x1 - 20), y: rng.range(y0 + 20, y1 - 20), r: rng.range(9, 15) });
+    for (let by = 0; by < GRID; by++) {
+      for (let bx = 0; bx < GRID; bx++) {
+        const c = blockCenter(bx, by);
+        const kind = this.pickBlockKind(bx, by, rng);
+        const block = { bx, by, kind, district: districtOf(bx, by), buildings: [], trees: [] };
+        if (kind === 'park') {
+          const n = int(rng, 5, 9);
+          for (let i = 0; i < n; i++) {
+            block.trees.push({
+              x: c.x + range(rng, -BLOCK / 2 + 30, BLOCK / 2 - 30),
+              y: c.y + range(rng, -BLOCK / 2 + 30, BLOCK / 2 - 30),
+              r: range(rng, 12, 20),
+            });
+          }
+        } else if (kind === 'lot') {
+          // Open parking lot: painted bays, no buildings.
+          for (let i = 0; i < 6; i++) {
+            this.parkingSpots.push({
+              x: c.x - 90 + (i % 3) * 90,
+              y: c.y - 40 + Math.floor(i / 3) * 90,
+              angle: 0,
+            });
+          }
+        } else if (kind === 'pier') {
+          // Open docks: concrete, no buildings — the M3 fight happens here.
+        } else {
+          // Built-up block: 1-3 buildings, inset from the block edge.
+          const n = int(rng, 1, 3);
+          const spots = shuffle(rng, [
+            { dx: -60, dy: -60, w: 120, h: 120 },
+            { dx: 60, dy: -60, w: 120, h: 120 },
+            { dx: -60, dy: 60, w: 120, h: 120 },
+            { dx: 60, dy: 60, w: 120, h: 120 },
+            { dx: 0, dy: 0, w: 170, h: 170 },
+          ]).slice(0, n);
+          for (const s of spots) {
+            const b = {
+              x: c.x + s.dx,
+              y: c.y + s.dy,
+              w: s.w + range(rng, -20, 10),
+              h: s.h + range(rng, -20, 10),
+              color: pick(rng, ['#b08968', '#8d99ae', '#a98467', '#6c757d', '#e07a5f', '#81b29a']),
+              roof: pick(rng, ['#5d4037', '#37474f', '#6d4c41', '#455a64']),
+              height: range(rng, 6, 26),
+            };
+            block.buildings.push(b);
+            this.buildings.push(b);
+          }
         }
-        continue;
+        this.blocks.push(block);
       }
-      if (lotBlocks[key]) continue;
-      if (key === hideoutBlock) continue;
-      // One or two buildings per block, inset from the block edge.
-      const count = rng.chance(0.55) ? 2 : 1;
-      for (let b = 0; b < count; b += 1) {
-        const bw = rng.range(90, 190);
-        const bh = rng.range(70, 150);
-        const bx0 = count === 1
-          ? x0 + (x1 - x0 - bw) / 2
-          : x0 + 10 + b * ((x1 - x0 - bw - 20) / Math.max(1, count - 1));
-        const by0 = y0 + (y1 - y0 - bh) / 2 + rng.range(-12, 12);
-        buildings.push({
-          x: bx0, y: by0, w: bw, h: bh,
-          color: rng.pick(COLORS.building),
-          roof: rng.pick(COLORS.roof),
-          windows: rng.int(2, 5),
-        });
+    }
+
+    this.placeSites();
+    this.placeParking();
+  }
+
+  pickBlockKind(bx, by, rng) {
+    // Bottom row is the harbour: piers and water-side lots, not houses.
+    if (by === GRID - 1 && (bx === GRID - 1 || bx === GRID - 2)) return 'pier';
+    if (by === GRID - 1) return rng() < 0.5 ? 'park' : 'lot';
+    const r = rng();
+    if (r < 0.14) return 'park';
+    if (r < 0.24) return 'lot';
+    return 'built';
+  }
+
+  placeSites() {
+    // Hideout: a house in a built block near the west side, well inside it.
+    const hideBlock = this.blocks.find((b) => b.bx === 1 && b.by === 2 && b.kind === 'built')
+      || this.blocks.find((b) => b.kind === 'built' && b.bx <= 2);
+    const hc = blockCenter(hideBlock.bx, hideBlock.by);
+    // Clear any random building off the hideout plot, then put the house
+    // in as a real solid building so the player cannot walk through it.
+    this.buildings = this.buildings.filter((b) => dist(b.x, b.y, hc.x, hc.y) > 130);
+    hideBlock.buildings = hideBlock.buildings.filter((b) => dist(b.x, b.y, hc.x, hc.y) > 130);
+    const house = { x: hc.x, y: hc.y, w: 100, h: 72, color: '#e8dcc8', roof: '#c0392b', height: 10 };
+    hideBlock.buildings.push(house);
+    this.buildings.push(house);
+    this.sites.hideout = { x: hc.x, y: hc.y, block: hideBlock, label: 'Hideout' };
+
+    // Pit Stop: on the south road of a central block, facing the road.
+    const pitBlock = this.blocks.find((b) => b.bx === 4 && b.by === 4) || this.blocks[36];
+    const pc = blockCenter(pitBlock.bx, pitBlock.by);
+    this.sites.pitstop = { x: pc.x, y: pc.y + BLOCK / 2 - 8, label: 'Pit Stop' };
+
+    // Gun Barn: two blocks east of the hideout, inside its block.
+    const gunBlock = this.blocks.find((b) => b.bx === 3 && b.by === 2 && b.kind !== 'pier')
+      || this.blocks.find((b) => b.kind === 'built' && b.bx === 3);
+    const gc = blockCenter(gunBlock.bx, gunBlock.by);
+    // Keep the shop front clear of random buildings.
+    this.buildings = this.buildings.filter((b) => dist(b.x, b.y, gc.x, gc.y) > 110);
+    gunBlock.buildings = gunBlock.buildings.filter((b) => dist(b.x, b.y, gc.x, gc.y) > 110);
+    this.sites.gunbarn = { x: gc.x, y: gc.y, block: gunBlock, label: 'Gun Barn' };
+
+    // Pier: the harbour block at the south-east corner, on the docks.
+    const pierBlock = this.blocks.find((b) => b.kind === 'pier' && b.bx === GRID - 1);
+    const prc = blockCenter(pierBlock.bx, pierBlock.by);
+    this.sites.pier = { x: prc.x, y: prc.y + 40, block: pierBlock, label: 'Harbor Pier' };
+
+    // Taxi stand: on the road by the central plaza.
+    this.sites.taxiStand = { x: roadCenter(4), y: roadCenter(3), label: 'Taxi Stand' };
+  }
+
+  placeParking() {
+    // On-street bays along a few roads, angled to the kerb.
+    const rng = mulberry32(this.seed + 999);
+    for (let i = 0; i < 26; i++) {
+      const vertical = rng() < 0.5;
+      const line = int(rng, 1, GRID - 1);
+      const along = int(rng, 1, GRID - 1);
+      const c = roadCenter(line);
+      const a = roadCenter(along);
+      if (vertical) {
+        this.parkingSpots.push({ x: c + ROAD / 2 - 22, y: a, angle: Math.PI / 2 });
+      } else {
+        this.parkingSpots.push({ x: a, y: c + ROAD / 2 - 22, angle: 0 });
       }
     }
   }
 
-  // The hideout itself: a solid building in its reserved block, matching
-  // the landmark the renderer draws at ZONES.hideout.
-  buildings.push({
-    x: ZONES.hideout.x - 55, y: ZONES.hideout.y - 38, w: 110, h: 76,
-    color: '#7a4a6e', roof: '#5e3656', windows: 3,
-  });
+  // ---- collision & queries ----
 
-  // Dockyard: containers stacked east of the last road, water at the edge.
-  for (let i = 0; i < 14; i += 1) {
-    containers.push({
-      x: rng.range(3050, 3120), y: 740 + i * 62 + rng.range(-8, 8),
-      w: 56, h: 26, color: rng.pick(COLORS.container),
-    });
+  // True when the circle (x, y, r) touches any building.
+  hitsBuilding(x, y, r) {
+    for (const b of this.buildings) {
+      const nx = Math.max(b.x - b.w / 2, Math.min(x, b.x + b.w / 2));
+      const ny = Math.max(b.y - b.h / 2, Math.min(y, b.y + b.h / 2));
+      const dx = x - nx;
+      const dy = y - ny;
+      if (dx * dx + dy * dy < r * r) return b;
+    }
+    return null;
   }
 
-  return {
-    seed,
-    buildings,
-    parks,
-    containers,
-    water: { x: 3150, y: 0, w: WORLD_W - 3150, h: WORLD_H },
-    docks: { x: 3040, y: 700, w: 130, h: 1000 },
-    zones: ZONES,
-  };
-}
-
-// True when the point is on a road (inside the asphalt band).
-export function isOnRoad(x, y) {
-  for (const rx of ROAD_X) if (Math.abs(x - rx) <= ROAD_HALF) return true;
-  for (const ry of ROAD_Y) if (Math.abs(y - ry) <= ROAD_HALF) return true;
-  return false;
-}
-
-// The building rect a circle overlaps, or null. r is the circle radius.
-export function buildingAt(city, x, y, r) {
-  for (const b of city.buildings) {
-    if (x + r > b.x && x - r < b.x + b.w && y + r > b.y && y - r < b.y + b.h) return b;
+  // Push a circle out of buildings; returns the corrected position.
+  resolveCircle(x, y, r) {
+    for (let iter = 0; iter < 3; iter++) {
+      const b = this.hitsBuilding(x, y, r);
+      if (!b) break;
+      const nx = Math.max(b.x - b.w / 2, Math.min(x, b.x + b.w / 2));
+      const ny = Math.max(b.y - b.h / 2, Math.min(y, b.y + b.h / 2));
+      let dx = x - nx;
+      let dy = y - ny;
+      let d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 0.001) {
+        // Centre inside the building: push out along the smallest axis.
+        const left = x - (b.x - b.w / 2);
+        const right = b.x + b.w / 2 - x;
+        const top = y - (b.y - b.h / 2);
+        const bottom = b.y + b.h / 2 - y;
+        const m = Math.min(left, right, top, bottom);
+        if (m === left) x = b.x - b.w / 2 - r;
+        else if (m === right) x = b.x + b.w / 2 + r;
+        else if (m === top) y = b.y - b.h / 2 - r;
+        else y = b.y + b.h / 2 + r;
+        continue;
+      }
+      dx /= d;
+      dy /= d;
+      x = nx + dx * r;
+      y = ny + dy * r;
+    }
+    return { x, y };
   }
-  return null;
-}
 
-// Push a circle out of buildings and the world edge; returns corrected x/y.
-export function collideCircle(city, x, y, r) {
-  let nx = clamp(x, r, WORLD_W - r);
-  let ny = clamp(y, r, WORLD_H - r);
-  for (let pass = 0; pass < 2; pass += 1) {
-    const b = buildingAt(city, nx, ny, r);
-    if (!b) break;
-    const left = nx + r - b.x;
-    const right = b.x + b.w - (nx - r);
-    const top = ny + r - b.y;
-    const bottom = b.y + b.h - (ny - r);
-    const m = Math.min(left, right, top, bottom);
-    if (m === left) nx = b.x - r;
-    else if (m === right) nx = b.x + b.w + r;
-    else if (m === top) ny = b.y - r;
-    else ny = b.y + b.h + r;
+  // Is the point on a road (not inside a block)?
+  isRoad(x, y) {
+    if (x < 0 || y < 0 || x > this.size || y > this.size) return false;
+    const inRoadX = (x % (BLOCK + ROAD)) < ROAD;
+    const inRoadY = (y % (BLOCK + ROAD)) < ROAD;
+    return inRoadX || inRoadY;
   }
-  // The dock water is solid too.
-  if (nx > city.water.x - r) nx = city.water.x - r;
-  return { x: nx, y: ny };
-}
 
-// A random point on a road, for spawning traffic, fares and police.
-export function randomRoadPoint(rng) {
-  if (rng.chance(0.5)) {
-    return { x: rng.pick(ROAD_X) + rng.range(-20, 20), y: rng.range(120, WORLD_H - 120) };
+  // Nearest point on the road network to (x, y) — used to keep peds and
+  // traffic on the streets and to place mission markers on roads.
+  nearestRoadPoint(x, y) {
+    const pitch = BLOCK + ROAD;
+    const gx = Math.floor(x / pitch);
+    const gy = Math.floor(y / pitch);
+    const lx = x - gx * pitch;
+    const ly = y - gy * pitch;
+    if (lx < ROAD && ly < ROAD) {
+      // In the intersection: stay put.
+      return { x, y };
+    }
+    if (lx < ROAD) return { x: gx * pitch + ROAD / 2, y };
+    if (ly < ROAD) return { x, y: gy * pitch + ROAD / 2 };
+    // Inside a block: walk to the nearest road edge.
+    const dxRoad = Math.min(lx - ROAD, pitch - lx);
+    const dyRoad = Math.min(ly - ROAD, pitch - ly);
+    if (dxRoad < dyRoad) {
+      return { x: lx < pitch / 2 ? gx * pitch + ROAD / 2 : (gx + 1) * pitch + ROAD / 2, y };
+    }
+    return { x, y: ly < pitch / 2 ? gy * pitch + ROAD / 2 : (gy + 1) * pitch + ROAD / 2 };
   }
-  return { x: rng.range(120, WORLD_W - 120), y: rng.pick(ROAD_Y) + rng.range(-20, 20) };
-}
 
-// The nearest point on the road grid to (x, y).
-export function nearestRoadPoint(x, y) {
-  let best = null;
-  let bestD = Infinity;
-  for (const rx of ROAD_X) {
-    const d = Math.abs(x - rx);
-    if (d < bestD) { bestD = d; best = { x: rx, y }; }
+  // A random intersection centre.
+  randomIntersection(rng) {
+    return { x: roadCenter(int(rng, 0, GRID)), y: roadCenter(int(rng, 0, GRID)) };
   }
-  for (const ry of ROAD_Y) {
-    const d = Math.abs(y - ry);
-    if (d < bestD) { bestD = d; best = { x, y: ry }; }
+
+  // A random point on a road (for spawning traffic and peds).
+  randomRoadPoint(rng) {
+    const vertical = rng() < 0.5;
+    const line = int(rng, 0, GRID);
+    const along = range(rng, ROAD, this.size - ROAD);
+    return vertical
+      ? { x: roadCenter(line), y: along }
+      : { x: along, y: roadCenter(line) };
   }
-  return best;
 }

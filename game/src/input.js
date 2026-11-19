@@ -1,82 +1,62 @@
-// Keyboard and mouse state: held keys, edge-triggered presses, and the
-// mouse position in screen pixels plus its world position once aimed.
+// Keyboard + mouse input, with edge detection (pressed this frame).
+// The game reads keys by their `code` (KeyW, Space, KeyE, ...) so layout
+// does not matter, and the mouse by canvas-relative position for aiming.
+
 export class Input {
-  constructor() {
+  constructor(canvas) {
     this.keys = new Set();
-    this.pressedKeys = new Set();
-    this.mouse = { x: 0, y: 0, down: false, clicked: false, worldX: 0, worldY: 0 };
-    this._onKeyDown = (e) => {
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
-      if (!this.keys.has(e.code)) this.pressedKeys.add(e.code);
-      this.keys.add(e.code);
-    };
-    this._onKeyUp = (e) => this.keys.delete(e.code);
-    this._onMouseMove = (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      this.mouse.x = e.clientX - rect.left;
-      this.mouse.y = e.clientY - rect.top;
-    };
-    this._onMouseDown = (e) => {
-      if (e.button === 0) {
-        this.mouse.down = true;
-        this.mouse.clicked = true;
-      }
-    };
-    this._onMouseUp = (e) => {
-      if (e.button === 0) this.mouse.down = false;
-    };
-    this._onBlur = () => {
-      this.keys.clear();
-      this.mouse.down = false;
-    };
-    this.canvas = null;
-  }
-
-  attach(canvas) {
+    this.justPressed = new Set();
+    this.mouseX = 0;
+    this.mouseY = 0;
+    this.mouseDown = false;
+    this.mouseClicked = false;
     this.canvas = canvas;
-    window.addEventListener('keydown', this._onKeyDown);
-    window.addEventListener('keyup', this._onKeyUp);
-    window.addEventListener('blur', this._onBlur);
-    canvas.addEventListener('mousemove', this._onMouseMove);
-    canvas.addEventListener('mousedown', this._onMouseDown);
-    window.addEventListener('mouseup', this._onMouseUp);
+
+    window.addEventListener('keydown', (e) => {
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        e.preventDefault();
+      }
+      if (!this.keys.has(e.code)) this.justPressed.add(e.code);
+      this.keys.add(e.code);
+    });
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('blur', () => {
+      this.keys.clear();
+      this.mouseDown = false;
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      const r = canvas.getBoundingClientRect();
+      this.mouseX = e.clientX - r.left;
+      this.mouseY = e.clientY - r.top;
+    });
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button === 0) {
+        this.mouseDown = true;
+        this.mouseClicked = true;
+      }
+    });
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 0) this.mouseDown = false;
+    });
   }
 
-  // True while the key is held.
   down(code) {
     return this.keys.has(code);
   }
 
-  // True only on the frame the key went down; consumed by endFrame().
+  // True only on the frame the key went down.
   pressed(code) {
-    return this.pressedKeys.has(code);
+    return this.justPressed.has(code);
   }
 
-  // Movement axis from WASD / arrows: {x: -1..1, y: -1..1}.
-  moveAxis() {
-    let x = 0;
-    let y = 0;
-    if (this.down('KeyA') || this.down('ArrowLeft')) x -= 1;
-    if (this.down('KeyD') || this.down('ArrowRight')) x += 1;
-    if (this.down('KeyW') || this.down('ArrowUp')) y -= 1;
-    if (this.down('KeyS') || this.down('ArrowDown')) y += 1;
-    return { x, y };
+  // Axis helpers: -1, 0 or 1 from a pair of keys.
+  axis(neg, pos) {
+    return (this.keys.has(pos) ? 1 : 0) - (this.keys.has(neg) ? 1 : 0);
   }
 
-  // Driving axis: throttle -1..1 and steer -1..1.
-  driveAxis() {
-    let throttle = 0;
-    let steer = 0;
-    if (this.down('KeyW') || this.down('ArrowUp')) throttle += 1;
-    if (this.down('KeyS') || this.down('ArrowDown')) throttle -= 1;
-    if (this.down('KeyA') || this.down('ArrowLeft')) steer -= 1;
-    if (this.down('KeyD') || this.down('ArrowRight')) steer += 1;
-    return { throttle, steer };
-  }
-
-  // Call once per frame, after the world has read the edge state.
+  // Call at the end of every frame.
   endFrame() {
-    this.pressedKeys.clear();
-    this.mouse.clicked = false;
+    this.justPressed.clear();
+    this.mouseClicked = false;
   }
 }

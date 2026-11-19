@@ -1,6 +1,4 @@
-# Build output and local tooling stay out of the repository.
 out/
+.dev/
+node_modules/
 *.log
-.DS_Store
-Thumbs.db
-*.swp

@@ -1,8 +1,8 @@
-// Seeded random numbers (mulberry32) plus small helpers, so the city and
-// traffic are the same for a given seed and every run is reproducible.
+// Seeded random numbers — every run of the city is reproducible from a seed,
+// so a mission can be verified on seed 7 and seed 11 and give the same streets.
 export function mulberry32(seed) {
   let a = seed >>> 0;
-  return function next() {
+  return function () {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -11,59 +11,49 @@ export function mulberry32(seed) {
   };
 }
 
-export class RNG {
-  constructor(seed) {
-    this.next = mulberry32(seed);
-  }
-  // Float in [0, 1).
-  float() {
-    return this.next();
-  }
-  // Float in [min, max).
-  range(min, max) {
-    return min + this.next() * (max - min);
-  }
-  // Integer in [min, max] inclusive.
-  int(min, max) {
-    return Math.floor(this.range(min, max + 1));
-  }
-  // One element of an array.
-  pick(list) {
-    return list[Math.floor(this.next() * list.length)];
-  }
-  // True with probability p.
-  chance(p) {
-    return this.next() < p;
-  }
-  // Angle in radians, uniform over the circle.
-  angle() {
-    return this.next() * Math.PI * 2;
-  }
-  // A point inside a rectangle.
-  inRect(x, y, w, h) {
-    return { x: this.range(x, x + w), y: this.range(y, y + h) };
-  }
+export function range(rng, min, max) {
+  return min + rng() * (max - min);
 }
 
-// Clamp a value into [min, max].
-export function clamp(v, min, max) {
-  return v < min ? min : v > max ? max : v;
+export function int(rng, min, max) {
+  return Math.floor(range(rng, min, max + 1));
 }
 
-// Shortest signed angle from a to b, in (-PI, PI].
-export function angleDiff(a, b) {
-  let d = (b - a) % (Math.PI * 2);
-  if (d > Math.PI) d -= Math.PI * 2;
-  if (d < -Math.PI) d += Math.PI * 2;
-  return d;
+export function pick(rng, arr) {
+  return arr[Math.floor(rng() * arr.length)];
 }
 
-// Distance between two points.
-export function dist(ax, ay, bx, by) {
-  return Math.hypot(ax - bx, ay - by);
+export function shuffle(rng, arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
-// Linear interpolation.
+export function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
 export function lerp(a, b, t) {
   return a + (b - a) * t;
+}
+
+export function dist(ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function angleTo(ax, ay, bx, by) {
+  return Math.atan2(by - ay, bx - ax);
+}
+
+// Smallest signed turn from angle a to angle b, in (-PI, PI].
+export function angleDiff(a, b) {
+  let d = b - a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d <= -Math.PI) d += Math.PI * 2;
+  return d;
 }
