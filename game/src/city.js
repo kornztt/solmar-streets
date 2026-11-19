@@ -1,111 +1,89 @@
-// The city of Solmar: a road grid, blocks with buildings kept off the roads,
-// and the named landmarks the missions and shops use.
-import { CFG } from './config.js';
-import { choice, clamp, rand, randInt } from './random.js';
+// SOLMAR STREETS — city generation: road grid, buildings, landmarks.
+// Written fresh for round 9 (rebuild7).
+import { WORLD, CITY, pick } from './config.js';
 
-export function roadCentres() {
-  const out = [];
-  for (let i = 0; i < CFG.roadCount; i++) out.push(CFG.roadFirst + i * CFG.roadPitch);
-  return out;
+/** Road centerline coordinate for road index i (0..BLOCKS). */
+export function roadCenter(i) {
+  return i * (WORLD.BLOCK + WORLD.ROAD) + WORLD.ROAD / 2;
 }
 
-export function isOnRoad(x, y) {
-  const half = CFG.roadWidth / 2;
-  for (const c of roadCentres()) {
-    if (Math.abs(x - c) <= half || Math.abs(y - c) <= half) return true;
-  }
-  return false;
-}
-
-// nearest point on a road centreline (used by autopilot routing)
-export function roadSnap(x, y) {
-  const centres = roadCentres();
-  let bx = centres[0], bd = Infinity;
-  for (const c of centres) { const d = Math.abs(x - c); if (d < bd) { bd = d; bx = c; } }
-  let by = centres[0]; bd = Infinity;
-  for (const c of centres) { const d = Math.abs(y - c); if (d < bd) { bd = d; by = c; } }
-  // snap to whichever axis is nearer: stay on the closer road
-  return Math.abs(x - bx) <= Math.abs(y - by) ? { x: bx, y } : { x, y: by };
-}
-
-// point on the road grid closest to (x,y) along the same row/column
-export function nearestRoadPoint(x, y) {
-  const s = roadSnap(x, y);
-  return { x: clamp(s.x, 0, CFG.world), y: clamp(s.y, 0, CFG.world) };
-}
+const BUILDING_COLORS = ['#7d8a99', '#8a7f72', '#6f7f6a', '#93806a', '#5f6f8a', '#a08a7a', '#77877f', '#8d7d8d'];
 
 export function buildCity(rng) {
-  const centres = roadCentres();
   const buildings = [];
-  const roofColours = ['#5a6a7a', '#7a5a4a', '#4a5a6a', '#6a5a7a', '#556b5a', '#715a4a'];
-  // blocks sit between neighbouring roads; each block gets 1-3 buildings,
-  // inset by roadWidth/2 + blockClear from the road centreline so a clear
-  // lane always runs beside every road.
-  const inset = CFG.roadWidth / 2 + CFG.blockClear; // 90
-  const blockSpan = CFG.roadPitch - 2 * inset; // 220 of buildable space
-  for (let i = 0; i < CFG.roadCount - 1; i++) {
-    for (let j = 0; j < CFG.roadCount - 1; j++) {
-      const bx = centres[i] + inset, by = centres[j] + inset;
-      const n = randInt(rng, 1, 2);
+  for (let bx = 0; bx < WORLD.BLOCKS; bx++) {
+    for (let by = 0; by < WORLD.BLOCKS; by++) {
+      const x0 = roadCenter(bx) + WORLD.ROAD / 2 + 8;
+      const y0 = roadCenter(by) + WORLD.ROAD / 2 + 8;
+      const bw = WORLD.BLOCK - 16;
+      const bh = WORLD.BLOCK - 16;
+      const n = 1 + Math.floor(rng() * 2); // 1-2 buildings per block
       for (let k = 0; k < n; k++) {
-        const w = rand(rng, 70, blockSpan);
-        const h = rand(rng, 70, blockSpan / n);
-        const x = bx + rand(rng, 0, Math.max(0, blockSpan - w));
-        const y = by + (k * blockSpan) / n + rand(rng, 0, Math.max(0, blockSpan / n - h));
+        const w = bw * (n === 1 ? 0.72 : 0.42);
+        const h = bh * (n === 1 ? 0.6 : 0.42);
+        const x = x0 + (n === 1 ? bw * 0.14 : k * (bw * 0.5) + 4);
+        const y = y0 + (n === 1 ? bh * 0.2 : 6 + k * 4);
         buildings.push({
           x, y, w, h,
-          roof: choice(rng, roofColours),
-          floors: randInt(rng, 2, 9),
+          color: pick(rng, BUILDING_COLORS),
+          shade: 0.75 + rng() * 0.25,
+          windows: 2 + Math.floor(rng() * 4),
         });
       }
     }
   }
-  // Landmarks: named spots on roadside positions (all reachable by car).
+  const blockCenter = (bx, by) => ({
+    x: roadCenter(bx) + WORLD.ROAD / 2 + WORLD.BLOCK / 2,
+    y: roadCenter(by) + WORLD.ROAD / 2 + WORLD.BLOCK / 2,
+  });
+  // Landmarks: fixed blocks so missions always find them.
   const landmarks = {
-    vera: { name: "Vera's Office", x: 700, y: 700, colour: '#f5a623' },
-    harbor: { name: 'Harbor', x: 2900, y: 2900, colour: '#2aa198' },
-    bank: { name: 'Solmar Bank', x: 2580, y: 620, colour: '#b58900' },
-    diner: { name: 'Diner', x: 1020, y: 2180, colour: '#d33682' },
-    pitstop: { name: 'Pit Stop', x: 2180, y: 1020, colour: '#dc322f' },
-    gunbarn: { name: 'Gun Barn', x: 1420, y: 2580, colour: '#859900' },
-    plaza: { name: 'Rooftop Plaza', x: 1800, y: 1800, colour: '#6c71c4' },
-    hospital: { name: 'Hospital', x: 620, y: 2580, colour: '#eee8d5' },
-    police: { name: 'Police Station', x: 2180, y: 2180, colour: '#268bd2' },
-    depot: { name: 'Courier Depot', x: 1420, y: 1020, colour: '#cb4b16' },
-    stash: { name: 'Stash House', x: 2620, y: 2380, colour: '#2aa198' },
-    taxiA: { name: 'Taxi Stand North', x: 1000, y: 600, colour: '#fc0' },
-    taxiB: { name: 'Taxi Stand South', x: 2200, y: 2600, colour: '#fc0' },
+    home: { ...blockCenter(1, 5), name: 'Home' },
+    vera: { ...blockCenter(1, 5), name: 'Vera' },
+    harbor: { x: CITY - 60, y: roadCenter(2), name: 'Harbor' },
+    bank: { ...blockCenter(4, 1), name: 'Solmar Bank' },
+    plaza: { ...blockCenter(3, 3), name: 'Rooftop Plaza' },
+    pitstop: { x: roadCenter(2), y: roadCenter(4) + WORLD.ROAD / 2 + 30, name: 'Pit Stop' },
+    gunbarn: { x: roadCenter(5), y: roadCenter(4) + WORLD.ROAD / 2 + 30, name: 'Gun Barn' },
+    diner: { x: roadCenter(1), y: roadCenter(2) + WORLD.ROAD / 2 + 30, name: 'Diner' },
+    taxistand: { x: roadCenter(3), y: CITY - WORLD.ROAD / 2, name: 'Taxi Stand South' },
   };
-  // keep buildings clear of landmark fronts so markers are reachable
-  for (const lm of Object.values(landmarks)) {
-    for (let i = buildings.length - 1; i >= 0; i--) {
-      const b = buildings[i];
-      if (lm.x > b.x - 70 && lm.x < b.x + b.w + 70 && lm.y > b.y - 70 && lm.y < b.y + b.h + 70) {
-        buildings.splice(i, 1);
-      }
-    }
-  }
-  return { centres, buildings, landmarks };
+  return { size: CITY, buildings, landmarks };
 }
 
-// circle vs building collision: push (x,y,r) out of every building rect
+/** Push a circle (x,y,r) out of every building rect it overlaps. Returns corrected {x,y}. */
 export function collideBuildings(city, x, y, r) {
-  let px = x, py = y;
   for (const b of city.buildings) {
-    const nx = clamp(px, b.x, b.x + b.w), ny = clamp(py, b.y, b.y + b.h);
-    const dx = px - nx, dy = py - ny, d2 = dx * dx + dy * dy;
+    const cx = Math.max(b.x, Math.min(x, b.x + b.w));
+    const cy = Math.max(b.y, Math.min(y, b.y + b.h));
+    const dx = x - cx, dy = y - cy;
+    const d2 = dx * dx + dy * dy;
     if (d2 < r * r) {
-      if (d2 < 0.001) { px = b.x - r; continue; }
+      if (d2 === 0) { x = b.x - r; continue; }
       const d = Math.sqrt(d2);
-      px = nx + (dx / d) * r; py = ny + (dy / d) * r;
+      x = cx + (dx / d) * r;
+      y = cy + (dy / d) * r;
     }
   }
-  return { x: px, y: py };
+  return { x, y };
 }
 
-export function pointInBuilding(city, x, y) {
-  for (const b of city.buildings) {
-    if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h) return true;
+/** A random point on a road centerline. */
+export function randomRoadPoint(rng) {
+  const i = Math.floor(rng() * (WORLD.BLOCKS + 1));
+  const j = Math.floor(rng() * (WORLD.BLOCKS + 1));
+  if (rng() < 0.5) return { x: roadCenter(i), y: 40 + rng() * (CITY - 80) };
+  return { x: 40 + rng() * (CITY - 80), y: roadCenter(j) };
+}
+
+/** Nearest road centerline point to (x,y) — used for traffic waypoints. */
+export function nearestRoadPoint(x, y) {
+  let best = null, bd = Infinity;
+  for (let i = 0; i <= WORLD.BLOCKS; i++) {
+    const c = roadCenter(i);
+    const d1 = Math.abs(x - c), d2 = Math.abs(y - c);
+    if (d1 < bd) { bd = d1; best = { x: c, y }; }
+    if (d2 < bd) { bd = d2; best = { x, y: c }; }
   }
-  return false;
+  return best;
 }

@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SOLMAR STREETS — an open-world crime game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  html, body { margin: 0; padding: 0; background: #0d1526; height: 100%; overflow: hidden; }
-  #wrap { display: flex; align-items: center; justify-content: center; height: 100%; }
-  canvas { width: 1280px; height: 720px; max-width: 100vw; max-height: 100vh; background: #111; display: block; }
+  html, body { margin: 0; padding: 0; background: #10131a; height: 100%; overflow: hidden; }
+  #wrap { display: flex; align-items: center; justify-content: center; height: 100vh; }
+  canvas { width: min(100vw, 177.78vh); height: min(100vh, 56.25vw); background: #000; display: block; }
 </style>
 </head>
 <body>
-<div id="wrap"><canvas id="game" width="1280" height="720"></canvas></div>
-<script type="module" src="./src/main.js"></script>
+<div id="wrap"><canvas id="game"></canvas></div>
+<script type="module" src="src/main.js"></script>
 </body>
 </html>

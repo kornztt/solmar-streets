@@ -1,30 +1,16 @@
-// SOLMAR STREETS — entrypoint. Hands the game in: copies game/ and
-// screenshots/ beside this file into the output dir and writes the dossier
-// the judge reads, using the vendored make.fun library.
-//
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+// SOLMAR STREETS — dossier builder entry point (Node 22, no build step).
+// Run: MAKEFUN_OUTPUT_DIR=out node main.ts
 import { buildDossier } from './vendor/makefun-game.ts';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 
-const here = fileURLToPath(new URL('.', import.meta.url));
-const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
-
-mkdirSync(out, { recursive: true });
-cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
-mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) {
-  cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
-}
-
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  }),
-);
+const outDir = process.env.MAKEFUN_OUTPUT_DIR || 'out';
+mkdirSync(outDir, { recursive: true });
+const dossier = buildDossier('.', {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+});
+writeFileSync(join(outDir, 'dossier.json'), dossier);
+console.log(`dossier written: ${outDir}/dossier.json (${dossier.length} bytes)`);
