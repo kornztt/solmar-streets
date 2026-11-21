@@ -2,16 +2,63 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>SOLMAR STREETS — an open-world crime game</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOLMAR STREETS — an open-world crime game</title>
 <style>
-  html, body { margin: 0; padding: 0; background: #10131a; height: 100%; overflow: hidden; }
-  #wrap { display: flex; align-items: center; justify-content: center; height: 100vh; }
-  canvas { width: min(100vw, 177.78vh); height: min(100vh, 56.25vw); background: #000; display: block; }
+  html, body { margin: 0; padding: 0; background: #0d1526; overflow: hidden; font-family: sans-serif; }
+  #wrap { position: relative; width: 1280px; height: 720px; margin: 0 auto; }
+  canvas { display: block; background: #79a6c8; }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(8, 12, 24, 0.82); color: #fff; text-align: center; z-index: 5; }
+  .screen h1 { font-size: 64px; margin: 0 0 8px; color: #f1c40f; letter-spacing: 4px; text-shadow: 0 4px 0 #7d6608; }
+  .screen h2 { font-size: 44px; margin: 0 0 12px; color: #e74c3c; letter-spacing: 3px; }
+  .screen p { font-size: 17px; max-width: 640px; line-height: 1.5; color: #ddd; }
+  .screen button { font-size: 20px; padding: 12px 34px; margin: 8px; background: #f1c40f; color: #222; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+  .screen button:hover { background: #ffd94d; }
+  .screen button.ghost { background: #34495e; color: #fff; }
+  #shop-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 380px; background: #1a2233; border: 3px solid #f1c40f; border-radius: 10px; color: #fff; padding: 22px; z-index: 6; display: none; text-align: center; }
+  #shop-panel h3 { margin: 0 0 8px; color: #f1c40f; font-size: 24px; }
+  #shop-panel p { color: #ddd; }
+  #shop-panel button { font-size: 17px; padding: 10px 22px; margin: 6px; background: #2ecc71; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+  #shop-panel button.ghost { background: #555; }
+  #pause-screen, #wasted-screen { display: none; }
 </style>
 </head>
 <body>
-<div id="wrap"><canvas id="game"></canvas></div>
+<div id="wrap">
+  <canvas id="game" width="1280" height="720"></canvas>
+
+  <div id="title-screen" class="screen">
+    <h1>SOLMAR STREETS</h1>
+    <p>An open-world crime game. Steal cars, outrun the police, run five story
+    missions, drive taxis, deliver parcels and stay alive in Solmar City.
+    Built by an AI agent for make.fun.</p>
+    <p>WASD move / drive &middot; Mouse aim &middot; Click shoot &middot; E enter car / interact<br>
+    F punch &middot; P pause &middot; M mute</p>
+    <div>
+      <button id="start-btn">Start Game</button>
+      <button id="continue-btn" class="ghost" style="display:none">Continue</button>
+    </div>
+  </div>
+
+  <div id="pause-screen" class="screen">
+    <h1 style="color:#fff">PAUSED</h1>
+    <p>Take a breath. Solmar City waits.</p>
+    <button id="resume-btn">Resume</button>
+  </div>
+
+  <div id="wasted-screen" class="screen">
+    <h2>WASTED</h2>
+    <p>The streets got the better of you this time.</p>
+    <button id="respawn-btn">Respawn — $100</button>
+  </div>
+
+  <div id="shop-panel">
+    <h3 id="shop-title">Shop</h3>
+    <p id="shop-desc"></p>
+    <button id="shop-buy">Buy</button>
+    <button id="shop-close" class="ghost">Close</button>
+  </div>
+</div>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>
