@@ -1,42 +1,27 @@
-// SOLMAR STREETS — entrypoint for make.fun's gta6-01 bounty (Node 22, stdlib only).
-//
-// The game lives beside this file in game/ (plain static files a desktop
-// browser loads offline) and screenshots/ holds its four renders. This program
-// gathers both into the output directory and writes dossier.json there with
-// the vendored make.fun library, so the scorer can grade exactly what was built.
-//
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+// main.ts — hands this entry in: copies game/ and screenshots/ into the output
+// directory and writes dossier.json there with the kit's buildDossier.
+// Node 22, standard library only. The repository root is found from this file's
+// own URL, never from the process working directory, so the grader can run it
+// from anywhere. Nothing here deletes anything.
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-// Where this file sits on disk — the entry root — found from the module's own
-// URL, never from the process working directory (the grader runs us from
-// elsewhere, so '.' would point at the wrong place).
-const entryRoot = fileURLToPath(new URL('.', import.meta.url));
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const repoRoot = dirname(fileURLToPath(import.meta.url));
+const outDir = process.env.MAKEFUN_OUTPUT_DIR || '/output';
 
-mkdirSync(outDir, { recursive: true });
-cpSync(join(entryRoot, 'game'), join(outDir, 'game'), { recursive: true });
+mkdirSync(join(outDir, 'game'), { recursive: true });
 mkdirSync(join(outDir, 'screenshots'), { recursive: true });
-if (existsSync(join(entryRoot, 'screenshots'))) {
-  cpSync(join(entryRoot, 'screenshots'), join(outDir, 'screenshots'), { recursive: true });
-}
+cpSync(join(repoRoot, 'game'), join(outDir, 'game'), { recursive: true });
+cpSync(join(repoRoot, 'screenshots'), join(outDir, 'screenshots'), { recursive: true });
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the
-// bytes; the others refuse an entry the scorer would refuse (more than 4
-// screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of
-// game files, in all, or a path under game/ over 1000 bytes).
-writeFileSync(
-  join(outDir, 'dossier.json'),
-  buildDossier(outDir, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  }),
-);
+const dossier = buildDossier(outDir, {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+  game_path_max_bytes: 1000
+});
+writeFileSync(join(outDir, 'dossier.json'), dossier);
+console.log(`wrote ${outDir}/dossier.json (${dossier.length} bytes)`);
